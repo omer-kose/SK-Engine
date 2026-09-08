@@ -33,6 +33,9 @@ namespace SK::VkRendererBackend
 		StorageImage
 	};
 
+	static constexpr uint32_t INVALID_RESOURCE_DESCRIPTOR_HANDLE = std::numeric_limits<uint32_t>::max();
+	static constexpr uint32_t INVALID_SAMPLER_DESCRIPTOR_HANDLE = std::numeric_limits<uint8_t>::max();
+
 	struct ResourceDescriptorHandle
 	{
 		/*
@@ -50,7 +53,7 @@ namespace SK::VkRendererBackend
 
 			It is the caller's responsibility to use the handle with the shader resource type matching ResourceDescriptorKind.
 		*/
-		uint32_t index = std::numeric_limits<uint32_t>::max();
+		uint32_t index = INVALID_RESOURCE_DESCRIPTOR_HANDLE;
 		ResourceDescriptorKind kind = ResourceDescriptorKind::UniformBuffer;
 	};
 
@@ -59,17 +62,17 @@ namespace SK::VkRendererBackend
 		/*
 			Sampler descriptor indices are absolute slots in the sampler heap.
 		*/
-		uint8_t index = std::numeric_limits<uint8_t>::max();
+		uint8_t index = INVALID_SAMPLER_DESCRIPTOR_HANDLE;
 	};
 
 	inline bool isValid(ResourceDescriptorHandle handle)
 	{
-		return handle.index != std::numeric_limits<uint32_t>::max();
+		return handle.index != INVALID_RESOURCE_DESCRIPTOR_HANDLE;
 	}
 
 	inline bool isValid(SamplerDescriptorHandle handle)
 	{
-		return handle.index != std::numeric_limits<uint8_t>::max();
+		return handle.index != INVALID_SAMPLER_DESCRIPTOR_HANDLE;
 	}
 
 	struct DescriptorHeapDesc

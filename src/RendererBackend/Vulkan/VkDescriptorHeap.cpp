@@ -149,7 +149,6 @@ SK::VkRendererBackend::ResourceDescriptorHandle SK::VkRendererBackend::allocateR
 	else
 	{
 		// Fetch the available slot and give that index to the handle
-		fmt::println("Resource Descriptor index is available in the free list using the index: {}", heap->resourceFreeList.back());
 		handle.index = heap->resourceFreeList.back();
 		handle.kind = kind;
 
@@ -190,7 +189,6 @@ SK::VkRendererBackend::SamplerDescriptorHandle SK::VkRendererBackend::allocateSa
 	else
 	{
 		// Fetch the available slot and give that index to the handle
-		fmt::println("Sampler Descriptor index is available in the free list using the index: {}", heap->samplerFreeList.back());
 		handle.index = heap->samplerFreeList.back();
 
 		heap->samplerFreeList.pop_back();

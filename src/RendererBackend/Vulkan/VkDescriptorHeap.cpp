@@ -131,18 +131,41 @@ SK::VkRendererBackend::ResourceDescriptorHandle SK::VkRendererBackend::allocateR
 	assert(heap);
 	assert(heap->initialized);
 
-	if (heap->nextResourceDescriptor >= heap->maxResourceDescriptors)
+	ResourceDescriptorHandle handle{};
+
+	if (heap->resourceFreeList.empty())
 	{
-		fmt::println("Resource Descriptor Heap is exhausted.");
-		abort();
+		if (heap->nextResourceDescriptor >= heap->maxResourceDescriptors)
+		{
+			fmt::println("Resource Descriptor Heap is exhausted.");
+			abort();
+		}
+
+		handle.index = heap->nextResourceDescriptor;
+		handle.kind = kind;
+
+		++heap->nextResourceDescriptor;
+	}
+	else
+	{
+		// Fetch the available slot and give that index to the handle
+		fmt::println("Resource Descriptor index is available in the free list using the index: {}", heap->resourceFreeList.back());
+		handle.index = heap->resourceFreeList.back();
+		handle.kind = kind;
+
+		heap->resourceFreeList.pop_back();
 	}
 
-	ResourceDescriptorHandle handle{};
-	handle.index = heap->nextResourceDescriptor;
-	handle.kind = kind;
-
-	++heap->nextResourceDescriptor;
 	return handle;
+}
+
+void SK::VkRendererBackend::deleteDescriptor(DescriptorHeap* heap, ResourceDescriptorHandle& handle)
+{
+	// Make the index of the handle available in the resource free list
+	heap->resourceFreeList.push_back(handle.index);
+
+	// invalidate the handle
+	handle.index = SK::VkRendererBackend::INVALID_RESOURCE_DESCRIPTOR_HANDLE;
 }
 
 SK::VkRendererBackend::SamplerDescriptorHandle SK::VkRendererBackend::allocateSamplerDescriptor(DescriptorHeap* heap)
@@ -150,17 +173,39 @@ SK::VkRendererBackend::SamplerDescriptorHandle SK::VkRendererBackend::allocateSa
 	assert(heap);
 	assert(heap->initialized);
 
-	if (heap->nextSamplerDescriptor >= heap->maxSamplerDescriptors)
-	{
-		fmt::println("Sampler Descriptor Heap is exhausted.");
-		abort();
-	}
-
 	SamplerDescriptorHandle handle{};
-	handle.index = heap->nextSamplerDescriptor;
 
-	++heap->nextSamplerDescriptor;
+	if (heap->samplerFreeList.empty())
+	{
+		if (heap->nextSamplerDescriptor >= heap->maxSamplerDescriptors)
+		{
+			fmt::println("Sampler Descriptor Heap is exhausted.");
+			abort();
+		}
+
+		handle.index = heap->nextSamplerDescriptor;
+
+		++heap->nextSamplerDescriptor;
+	}
+	else
+	{
+		// Fetch the available slot and give that index to the handle
+		fmt::println("Sampler Descriptor index is available in the free list using the index: {}", heap->samplerFreeList.back());
+		handle.index = heap->samplerFreeList.back();
+
+		heap->samplerFreeList.pop_back();
+	}
+	
 	return handle;
+}
+
+void SK::VkRendererBackend::deleteDescriptor(DescriptorHeap* heap, SamplerDescriptorHandle& handle)
+{
+	// Make the index of the handle available in the sampler free list
+	heap->samplerFreeList.push_back(handle.index);
+
+	// invalidate the handle
+	handle.index = SK::VkRendererBackend::INVALID_SAMPLER_DESCRIPTOR_HANDLE;
 }
 
 VkDeviceSize SK::VkRendererBackend::getResourceDescriptorOffset(const DescriptorHeap* heap, ResourceDescriptorHandle handle)

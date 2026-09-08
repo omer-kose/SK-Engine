@@ -111,6 +111,9 @@ namespace SK::VkRendererBackend
 		uint32_t nextResourceDescriptor = 0;
 		uint32_t nextSamplerDescriptor = 0;
 
+		std::vector<uint32_t> resourceFreeList{};
+		std::vector<uint8_t> samplerFreeList{};
+
 		bool initialized = false;
 	};
 
@@ -119,7 +122,9 @@ namespace SK::VkRendererBackend
 	void bindDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, const DescriptorHeap* heap);
 	// Allocate functions allocates a slot in the heap and returns a handle. The descriptor info is then written with write functions with that handle to that heap slot.
 	ResourceDescriptorHandle allocateResourceDescriptor(DescriptorHeap* heap, ResourceDescriptorKind kind);
+	void deleteDescriptor(DescriptorHeap* heap, ResourceDescriptorHandle& handle);
 	SamplerDescriptorHandle allocateSamplerDescriptor(DescriptorHeap* heap);
+	void deleteDescriptor(DescriptorHeap* heap, SamplerDescriptorHandle& handle);
 	VkDeviceSize getResourceDescriptorOffset(const DescriptorHeap* heap, ResourceDescriptorHandle handle);
 	VkDeviceSize getSamplerDescriptorOffset(const DescriptorHeap* heap, SamplerDescriptorHandle handle);
 	void writeUniformBufferDescriptor(

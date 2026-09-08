@@ -33,6 +33,9 @@ namespace SK::VkRendererBackend
 		StorageImage
 	};
 
+	static constexpr uint32_t INVALID_RESOURCE_DESCRIPTOR_HANDLE = std::numeric_limits<uint32_t>::max();
+	static constexpr uint32_t INVALID_SAMPLER_DESCRIPTOR_HANDLE = std::numeric_limits<uint8_t>::max();
+
 	struct ResourceDescriptorHandle
 	{
 		/*
@@ -50,7 +53,7 @@ namespace SK::VkRendererBackend
 
 			It is the caller's responsibility to use the handle with the shader resource type matching ResourceDescriptorKind.
 		*/
-		uint32_t index = std::numeric_limits<uint32_t>::max();
+		uint32_t index = INVALID_RESOURCE_DESCRIPTOR_HANDLE;
 		ResourceDescriptorKind kind = ResourceDescriptorKind::UniformBuffer;
 	};
 
@@ -59,17 +62,17 @@ namespace SK::VkRendererBackend
 		/*
 			Sampler descriptor indices are absolute slots in the sampler heap.
 		*/
-		uint8_t index = std::numeric_limits<uint8_t>::max();
+		uint8_t index = INVALID_SAMPLER_DESCRIPTOR_HANDLE;
 	};
 
 	inline bool isValid(ResourceDescriptorHandle handle)
 	{
-		return handle.index != std::numeric_limits<uint32_t>::max();
+		return handle.index != INVALID_RESOURCE_DESCRIPTOR_HANDLE;
 	}
 
 	inline bool isValid(SamplerDescriptorHandle handle)
 	{
-		return handle.index != std::numeric_limits<uint8_t>::max();
+		return handle.index != INVALID_SAMPLER_DESCRIPTOR_HANDLE;
 	}
 
 	struct DescriptorHeapDesc
@@ -108,6 +111,9 @@ namespace SK::VkRendererBackend
 		uint32_t nextResourceDescriptor = 0;
 		uint32_t nextSamplerDescriptor = 0;
 
+		std::vector<uint32_t> resourceFreeList{};
+		std::vector<uint8_t> samplerFreeList{};
+
 		bool initialized = false;
 	};
 
@@ -116,7 +122,9 @@ namespace SK::VkRendererBackend
 	void bindDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, const DescriptorHeap* heap);
 	// Allocate functions allocates a slot in the heap and returns a handle. The descriptor info is then written with write functions with that handle to that heap slot.
 	ResourceDescriptorHandle allocateResourceDescriptor(DescriptorHeap* heap, ResourceDescriptorKind kind);
+	void deleteDescriptor(DescriptorHeap* heap, ResourceDescriptorHandle& handle);
 	SamplerDescriptorHandle allocateSamplerDescriptor(DescriptorHeap* heap);
+	void deleteDescriptor(DescriptorHeap* heap, SamplerDescriptorHandle& handle);
 	VkDeviceSize getResourceDescriptorOffset(const DescriptorHeap* heap, ResourceDescriptorHandle handle);
 	VkDeviceSize getSamplerDescriptorOffset(const DescriptorHeap* heap, SamplerDescriptorHandle handle);
 	void writeUniformBufferDescriptor(

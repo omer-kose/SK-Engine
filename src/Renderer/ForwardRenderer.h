@@ -18,8 +18,8 @@ namespace SK::ForwardRenderer
 		const SK::Renderer::DrawContext* drawContext = nullptr;
 	};
 
-	// Push constants for mesh draws
-	struct PushConstants
+	// Push data for mesh draws
+	struct PushData
 	{
 		glm::mat4 worldMatrix;
 		SK::Renderer::BufferDeviceAddress vertexBufferAddress;

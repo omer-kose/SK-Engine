@@ -275,6 +275,11 @@ bool SK::Asset::importGLTF(std::string_view filePath, ImportedAsset* outAsset)
             pbrData.metallicRoughnessTexture = static_cast<uint32_t>(gltfMat.pbrData.metallicRoughnessTexture->textureIndex);
         }
 
+        if (gltfMat.normalTexture.has_value())
+        {
+            pbrData.normalTexture = static_cast<uint32_t>(gltfMat.normalTexture->textureIndex);
+        }
+
         mat.materialData = pbrData;
 
         outAsset->materials.push_back(std::move(mat));

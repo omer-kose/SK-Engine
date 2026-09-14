@@ -10,8 +10,8 @@ void SK::ForwardRenderer::createResources(SK::Renderer::RenderContext* renderCon
 	SK::Renderer::GraphicsPipelineDesc opaqueDesc{};
 	opaqueDesc.debugName = "Forward Opaque";
 	opaqueDesc.shaders = {
-		{ "../../shaders/glsl/forward/forward_vert.spv", SK::Renderer::ShaderStageFlagBits::VertexShader },
-		{ "../../shaders/glsl/forward/forward_frag.spv", SK::Renderer::ShaderStageFlagBits::FragmentShader }
+		{ "../../shaders/glsl/forward_pbr/forward_pbr_vert.spv", SK::Renderer::ShaderStageFlagBits::VertexShader },
+		{ "../../shaders/glsl/forward_pbr/forward_pbr_frag.spv", SK::Renderer::ShaderStageFlagBits::FragmentShader }
 	};
 	opaqueDesc.topology = SK::Renderer::PrimitiveTopology::TriangleList;
 	opaqueDesc.polygonMode = SK::Renderer::PolygonMode::Fill;
@@ -62,13 +62,13 @@ void SK::ForwardRenderer::draw(SK::Renderer::RenderContext* renderContext, const
 	uint32_t lastMeshIndex = UINT32_MAX;
 
 	auto drawPacket = [&](const SK::Renderer::DrawPacket& packet) {
-		PushConstants pushConstants{};
+		PushData pushConstants{};
 		pushConstants.worldMatrix = packet.worldTransform;
 		pushConstants.vertexBufferAddress = SK::Renderer::getVertexBufferDeviceAddress(renderContext, packet.meshIndex);
 		pushConstants.frameIndex = SK::Renderer::getFrameIndex(renderContext);
 		pushConstants.materialIndex = packet.materialIndex;
 
-		SK::Renderer::pushData(renderContext, 0, sizeof(PushConstants), &pushConstants);
+		SK::Renderer::pushData(renderContext, 0, sizeof(PushData), &pushConstants);
 
 		if (lastMeshIndex != packet.meshIndex)
 		{

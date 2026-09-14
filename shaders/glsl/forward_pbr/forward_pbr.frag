@@ -74,7 +74,7 @@ void main()
 	// Fetch the material info
 	PBRData pbrData = pbrMaterials[pushData.materialIndex];
 	// baseColor (albedo) is in sRGB format. Applying gamma corection to map it back to the linear space as we always work in linear space.
-	vec3 albedo = pow(texture(SAMPLER2D(pbrData.baseColorTexture, pbrData.baseColorTextureSampler), vsIn.uv).rgb, vec3(2.2f));
+	vec3 albedo = pbrData.baseColorFactor.rgb * pow(texture(SAMPLER2D(pbrData.baseColorTexture, pbrData.baseColorTextureSampler), vsIn.uv).rgb, vec3(2.2f));
 	// in GLTF 2.0 format, green channel contains roughness values and the blue channel contains metalness values
 	float roughness = texture(SAMPLER2D(pbrData.metallicRoughnessTexture, pbrData.metallicRoughnessTextureSampler), vsIn.uv).g;
 	float metallic = texture(SAMPLER2D(pbrData.metallicRoughnessTexture, pbrData.metallicRoughnessTextureSampler), vsIn.uv).b;
@@ -83,7 +83,7 @@ void main()
 	vec3 Lo = vec3(0.0f);
 	// There is only directional sunlight for now.
 	vec3 L = -sceneData[pushData.frameIndex].sunlightDirection.xyz; // light direction is always passed normalized.
-	Lo += computeCookTorranceBRDF(N, V, L, sceneData[pushData.frameIndex].sunlightColor.xyz, albedo, roughness, metallic, F0);
+	Lo += computeCookTorranceBRDF(N, V, L, sceneData[pushData.frameIndex].sunlightColor.xyz * sceneData[pushData.frameIndex].sunlightDirection.w, albedo, roughness, metallic, F0);
 
 	vec3 color = Lo;
 	// Tonemap the result from LDR to HDR

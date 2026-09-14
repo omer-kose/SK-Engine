@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     SK::Scene::State scene;
     SK::Scene::setCameraProperties(&scene, glm::vec3(0.0f, 0.0f, 0.0f), 0.0f, 0.0f);
     SK::Scene::setProjectionProperties(&scene, 70.0f, 0.1f, 10000.0f);
-    SK::Scene::setGlobalLightingProperties(&scene, glm::vec4(0.1f), glm::normalize(glm::vec4(0.0f, -1.0f, 0.5f, 1.0f)), glm::vec4(2.0f));
+    SK::Scene::setGlobalLightingProperties(&scene, glm::vec4(0.1f), glm::vec4(glm::normalize(glm::vec3(1.0f, -1.0f, 0.0f)), 2.0f), glm::vec4(1.0f));
     const bool sceneLoaded = SK::Scene::loadGLTFScene(&scene, "../../assets/Sponza/Sponza.gltf");
     assert(sceneLoaded);
 

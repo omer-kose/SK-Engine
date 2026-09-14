@@ -22,9 +22,9 @@ namespace SK::Material
 	// Using scalar layout for the material buffer. 1-to-1 matching with what will be stored on the GPU side. 
 	struct PBRData
 	{
-		float baseColorFactor[4] = { 1.f, 1.f, 1.f, 1.f };
-		float metallicFactor = 1.f;
-		float roughnessFactor = 1.f;
+		float baseColorFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		float metallicFactor;
+		float roughnessFactor;
 		// Texture ids (On CPU these are actual indices into the textures array. On GPU these are descriptor handle indices into the resource heap.)
 		uint32_t baseColorTexture;
 		uint32_t metallicRoughnessTexture;

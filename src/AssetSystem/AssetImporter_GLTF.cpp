@@ -364,6 +364,16 @@ bool SK::Asset::importGLTF(std::string_view filePath, ImportedAsset* outAsset)
                     });
             }
 
+            // Tangents
+            if (auto attr = primitive.findAttribute("TANGENT"); attr != primitive.attributes.end())
+            {
+                fastgltf::iterateAccessorWithIndex<glm::vec4>(asset, asset.accessors[attr->accessorIndex],
+                    [&](glm::vec4 v, size_t index)
+                    {
+                        vertices[initialVertex + index].tangent = v;
+                    });
+            }
+
             // UVs
             if (auto attr = primitive.findAttribute("TEXCOORD_0"); attr != primitive.attributes.end())
             {

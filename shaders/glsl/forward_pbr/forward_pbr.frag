@@ -7,7 +7,7 @@
 layout (location = 0) in VSIn
 {
 	vec3 normal;
-	vec3 tangent;
+	vec4 tangent;
 	vec3 worldPos;
 	vec2 uv;
 } vsIn;
@@ -17,6 +17,19 @@ layout (location = 0) out vec4 fragColor;
 const float PI = 3.14159265359;
 
 #define SAMPLER2D(tID, sID) sampler2D(textures[nonuniformEXT(tID)], samplers[sID])
+
+vec3 fetchNormal(in PBRData pbrData)
+{
+	// Map from [0, 1] to [-1, 1]
+	vec3 sampledNormal = texture(SAMPLER2D(pbrData.normalTexture, pbrData.normalTextureSampler), vsIn.uv).xyz * 2.0f - 1.0f;
+
+	vec3 N = normalize(vsIn.normal);
+	vec3 T = normalize(vsIn.tangent.xyz);
+	T = normalize(T - dot(T, N) * N); // Gram-Schmidt re-orthogonalize
+	vec3 B = cross(N, T) * vsIn.tangent.w; // By GLTF 2.0 spec: bitangent = cross(normal.xyz, tangent.xyz) * tangent.w
+	mat3 TBN = mat3(T, B, N);
+	return normalize(TBN * sampledNormal);
+}
 
 /*
 	D: Trowbridge-Reitz GGX normal distribution function
@@ -68,11 +81,9 @@ vec3 computeCookTorranceBRDF(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo,
 
 void main() 
 {
-	vec3 N = normalize(vsIn.normal);
-	vec3 V = normalize(sceneData[pushData.frameIndex].camPos.xyz - vsIn.worldPos);
-
-	// Fetch the material info
 	PBRData pbrData = pbrMaterials[pushData.materialIndex];
+	vec3 V = normalize(sceneData[pushData.frameIndex].camPos.xyz - vsIn.worldPos);
+	vec3 N = fetchNormal(pbrData);
 	// baseColor (albedo) is in sRGB format. Applying gamma corection to map it back to the linear space as we always work in linear space.
 	vec3 albedo = pbrData.baseColorFactor.rgb * pow(texture(SAMPLER2D(pbrData.baseColorTexture, pbrData.baseColorTextureSampler), vsIn.uv).rgb, vec3(2.2f));
 	// in GLTF 2.0 format, green channel contains roughness values and the blue channel contains metalness values

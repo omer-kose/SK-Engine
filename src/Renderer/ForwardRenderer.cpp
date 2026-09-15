@@ -62,13 +62,13 @@ void SK::ForwardRenderer::draw(SK::Renderer::RenderContext* renderContext, const
 	uint32_t lastMeshIndex = UINT32_MAX;
 
 	auto drawPacket = [&](const SK::Renderer::DrawPacket& packet) {
-		PushConstants pushConstants{};
+		PushData pushConstants{};
 		pushConstants.worldMatrix = packet.worldTransform;
 		pushConstants.vertexBufferAddress = SK::Renderer::getVertexBufferDeviceAddress(renderContext, packet.meshIndex);
 		pushConstants.frameIndex = SK::Renderer::getFrameIndex(renderContext);
 		pushConstants.materialIndex = packet.materialIndex;
 
-		SK::Renderer::pushData(renderContext, 0, sizeof(PushConstants), &pushConstants);
+		SK::Renderer::pushData(renderContext, 0, sizeof(PushData), &pushConstants);
 
 		if (lastMeshIndex != packet.meshIndex)
 		{

@@ -25,15 +25,35 @@ void SK::VkRendererBackend::buildMaterialRegistry(State* vkRendererBackend, SK::
 		gpuPbrMaterialData.roughnessFactor = pbrData->roughnessFactor;
 
 		// With descriptor heaps, descriptor handle indices into the resource heap are stored. Doing the mapping from texture index to descriptor handle index here.
-		gpuPbrMaterialData.baseColorTexture = vkAssetRegistry->textures[pbrData->baseColorTexture].imageDescriptor.index;
-		gpuPbrMaterialData.metallicRoughnessTexture = vkAssetRegistry->textures[pbrData->metallicRoughnessTexture].imageDescriptor.index;
-		gpuPbrMaterialData.normalTexture = vkAssetRegistry->textures[pbrData->normalTexture].imageDescriptor.index;
-		gpuPbrMaterialData.emissiveTexture = vkAssetRegistry->textures[pbrData->emissiveTexture].imageDescriptor.index;
+		if (pbrData->baseColorTexture != SK::Material::INVALID_TEXTURE)
+		{
+			gpuPbrMaterialData.baseColorTexture = vkAssetRegistry->textures[pbrData->baseColorTexture].imageDescriptor.index;
+			gpuPbrMaterialData.baseColorTextureSampler = vkAssetRegistry->textures[pbrData->baseColorTexture].samplerDescriptor.index;
+		}
+		
+		if (pbrData->metallicRoughnessTexture != SK::Material::INVALID_TEXTURE)
+		{
+			gpuPbrMaterialData.metallicRoughnessTexture = vkAssetRegistry->textures[pbrData->metallicRoughnessTexture].imageDescriptor.index;
+			gpuPbrMaterialData.metallicRoughnessTextureSampler = vkAssetRegistry->textures[pbrData->metallicRoughnessTexture].samplerDescriptor.index;
+		}
+		
+		if (pbrData->normalTexture != SK::Material::INVALID_TEXTURE)
+		{
+			gpuPbrMaterialData.normalTexture = vkAssetRegistry->textures[pbrData->normalTexture].imageDescriptor.index;
+			gpuPbrMaterialData.normalTextureSampler = vkAssetRegistry->textures[pbrData->normalTexture].samplerDescriptor.index;
+		}
 
-		gpuPbrMaterialData.baseColorTextureSampler = vkAssetRegistry->textures[pbrData->baseColorTexture].samplerDescriptor.index;
-		gpuPbrMaterialData.metallicRoughnessTextureSampler = vkAssetRegistry->textures[pbrData->metallicRoughnessTexture].samplerDescriptor.index;
-		gpuPbrMaterialData.normalTextureSampler = vkAssetRegistry->textures[pbrData->normalTexture].samplerDescriptor.index;
-		gpuPbrMaterialData.emissiveTextureSampler = vkAssetRegistry->textures[pbrData->emissiveTexture].samplerDescriptor.index;
+		if (pbrData->emissiveTexture != SK::Material::INVALID_TEXTURE)
+		{
+			gpuPbrMaterialData.emissiveTexture = vkAssetRegistry->textures[pbrData->emissiveTexture].imageDescriptor.index;
+			gpuPbrMaterialData.emissiveTextureSampler = vkAssetRegistry->textures[pbrData->emissiveTexture].samplerDescriptor.index;
+		}
+
+		if (pbrData->occlusionTexture != SK::Material::INVALID_TEXTURE)
+		{
+			gpuPbrMaterialData.occlusionTexture = vkAssetRegistry->textures[pbrData->occlusionTexture].imageDescriptor.index;
+			gpuPbrMaterialData.occlusionTextureSampler = vkAssetRegistry->textures[pbrData->occlusionTexture].samplerDescriptor.index;
+		}
 		
 		pbrMaterialData.push_back(gpuPbrMaterialData);
 	}

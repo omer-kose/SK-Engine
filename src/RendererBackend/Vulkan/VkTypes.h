@@ -29,7 +29,8 @@ struct AllocatedImage
     VmaAllocation allocation;
     VkExtent3D imageExtent;
     VkFormat imageFormat;
-    uint32_t mipLevels = 0; // 0 by default (no mipmaps). Filled in during creation if the image created is mipmapped otherwise left 0.
+    // Filled in the exact number of mip levels desired during creation if the image created is mipmapped otherwise left this default value. Default value also works when the image is not mipmapped.
+    uint32_t mipLevels = VK_REMAINING_MIP_LEVELS;
 };
 
 struct AllocatedBuffer

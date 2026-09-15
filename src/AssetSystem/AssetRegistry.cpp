@@ -11,10 +11,11 @@ void SK::Asset::registerImported(AssetRegistry* assetRegistry, SK::Material::Mat
     // Remap imported material texture indices (local -> global texture indices) and register to the MaterialRegistry
     for(auto& mat : importedAsset.materials)
     {
-        mat.materialData.baseColorTexture += textureBaseIndex;
-        mat.materialData.metallicRoughnessTexture += textureBaseIndex;
-        mat.materialData.normalTexture += textureBaseIndex;
-        mat.materialData.emissiveTexture += textureBaseIndex;
+        mat.materialData.baseColorTexture += (mat.materialData.baseColorTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.metallicRoughnessTexture += (mat.materialData.metallicRoughnessTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.normalTexture += (mat.materialData.normalTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.emissiveTexture += (mat.materialData.emissiveTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.occlusionTexture += (mat.materialData.occlusionTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
 
         SK::Material::registerInstance(materialRegistry, std::move(mat));
     }

@@ -11,8 +11,8 @@ glm::mat4 Camera::getViewMatrix()
 
 glm::mat4 Camera::getRotationMatrix()
 {
-    glm::quat pitchRotation = glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f));
-    glm::quat yawRotation = glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::quat pitchRotation = glm::angleAxis(glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::quat yawRotation = glm::angleAxis(glm::radians(yaw), glm::vec3(0.0f, 1.0f, 0.0f));
     return glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
 }
 
@@ -48,13 +48,13 @@ void Camera::processSDLEvent(SDL_Event& e)
     }
     else if(e.type == SDL_MOUSEMOTION && rightMouseButtonDown)
     {
-        yaw -= (float)e.motion.xrel / 200.f;
-        pitch -= (float)e.motion.yrel / 200.f;
+        yaw -= (float)e.motion.xrel / 10.f;
+        pitch -= (float)e.motion.yrel / 10.f;
     }
 }
 
 void Camera::update()
 {
 	glm::mat4 cameraRotation = getRotationMatrix();
-	position += glm::vec3(cameraRotation * glm::vec4(0.5f * velocity, 0.0f));
+	position += glm::vec3(cameraRotation * glm::vec4(0.1f * velocity, 0.0f));
 }

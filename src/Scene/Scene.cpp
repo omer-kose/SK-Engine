@@ -39,12 +39,11 @@ void SK::Scene::updateGPUSceneData(State* scene, uint32_t viewportWidth, uint32_
 	const float aspectRatio = static_cast<float>(viewportWidth) / viewportHeight;
 
 	scene->gpuSceneData.view = scene->camera.getViewMatrix();
-
 	scene->gpuSceneData.proj = glm::perspectiveRH_ZO(glm::radians(scene->fov), aspectRatio, scene->nearPlane, scene->farPlane);
 	// Vulkan clip-space convention.
 	scene->gpuSceneData.proj[1][1] *= -1.0f;
-
 	scene->gpuSceneData.viewproj = scene->gpuSceneData.proj * scene->gpuSceneData.view;
+	scene->gpuSceneData.camPos = glm::vec4(scene->camera.position, 1.0f);
 
 	scene->gpuSceneData.ambientColor = scene->ambientColor;
 	scene->gpuSceneData.sunlightDirection = scene->sunlightDirection;

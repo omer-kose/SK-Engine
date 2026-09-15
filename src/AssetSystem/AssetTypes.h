@@ -36,6 +36,13 @@ namespace SK::Asset
 		CLAMP_TO_EDGE = 1
 	};
 
+	enum class TextureFormat : uint8_t
+	{
+		Undefined = 0,
+		RGBA8_UNORM, // linear texture space for textures: metallic-roughness, normal, occlusion.
+		RGBA8_SRGB // sRGB space for textures: baseColor (albedo), emissive. 
+	};
+
 	struct RawImage
 	{
 		std::vector<uint8_t> data;
@@ -51,6 +58,7 @@ namespace SK::Asset
 		TextureFilter magFilter = TextureFilter::LINEAR;
 		TextureMipmapMode mipmapMode = TextureMipmapMode::LINEAR;
 		TextureAddressMode addressMode = TextureAddressMode::REPEAT;
+		TextureFormat format = TextureFormat::Undefined; // Format must be provided.
 	};
 
 	struct RawTexture

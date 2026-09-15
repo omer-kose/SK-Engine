@@ -44,6 +44,19 @@ static VkSamplerAddressMode mapAddressMode(SK::Asset::TextureAddressMode address
     }
 }
 
+static VkFormat mapTextureFormat(SK::Asset::TextureFormat format)
+{
+    switch (format)
+    {
+    case SK::Asset::TextureFormat::RGBA8_SRGB:
+        return VK_FORMAT_R8G8B8A8_SRGB;
+    case SK::Asset::TextureFormat::RGBA8_UNORM:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    default:
+        return VK_FORMAT_UNDEFINED;
+    }
+}
+
 void SK::VkRendererBackend::buildGPUAssets(State* vkRendererBackend, SK::Asset::AssetRegistry* assetRegistry, VkAssetRegistry* vkAssetRegistry)
 {
     // Meshes
@@ -70,8 +83,9 @@ void SK::VkRendererBackend::buildGPUAssets(State* vkRendererBackend, SK::Asset::
         // Create image from tex.image.data
         if (!texture.image.data.empty())
         {
-            // Assuming texture data to be in RGBA 8 bit format. TODO: Later on, decide this by looking at the texture format.
-            VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+            VkFormat imageFormat = mapTextureFormat(texture.description.format);
+            assert(imageFormat != VK_FORMAT_UNDEFINED);
+            // Currently, all the loaded textures from GLTF assets are in 32 bit (8 per channel) format. Even if the alpha channel is not used (like normal maps), that channel is padded during asset loading.
             size_t dataSize = texture.image.width * texture.image.height * 1 * 4;
             gpuTexture.image = SK::VkRendererBackend::createImage(vkRendererBackend, (void*)texture.image.data.data(), dataSize, VkExtent3D{ texture.image.width, texture.image.height, 1 }, imageFormat, VK_IMAGE_USAGE_SAMPLED_BIT, texture.description.mipmapped);
             gpuTexture.ownsImage = true;

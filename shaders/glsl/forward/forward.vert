@@ -4,19 +4,22 @@
 
 #include "input_structures.h"
 
-layout (location = 0) out vec3 normal;
-layout (location = 1) out vec3 colorFactor;
-layout (location = 2) out vec2 uv;
+layout (location = 0) out VSOut
+{
+	vec3 normal;
+	vec4 tangent;
+	vec3 worldPos;
+	vec2 uv;
+} vsOut;
 
 void main()
 {
-	Vertex v = pushConstants.vertexBuffer.vertices[gl_VertexIndex];
-	vec4 position = vec4(v.position, 1.0f);
-	gl_Position = sceneData[pushConstants.frameIndex].viewproj * pushConstants.worldMatrix * position;
-
-	normal = (transpose(inverse(pushConstants.worldMatrix)) * vec4(v.normal, 0.0f)).xyz; // TODO: Pass the inverse transpose from the CPU side don't recompute it per vertex.
-	PBRData pbrData = pbrMaterials[pushConstants.materialIndex];
-	colorFactor = pbrData.baseColorFactor.xyz;
-	uv.x = v.uv_x;
-	uv.y = v.uv_y;
+	Vertex v = pushData.vertexBuffer.vertices[gl_VertexIndex];
+	vec4 worldPos = pushData.worldMatrix * vec4(v.position, 1.0f);
+	mat3 normalTransformation =  mat3(inverse(transpose(pushData.worldMatrix))); // TODO: Pass the inverse transpose from the CPU side don't recompute it per vertex.
+	vsOut.worldPos = vec3(worldPos);
+	vsOut.normal = normalTransformation * v.normal;
+	vsOut.tangent = vec4(normalTransformation * v.tangent.xyz, v.tangent.w);
+	vsOut.uv = vec2(v.uv_x, v.uv_y);
+	gl_Position = sceneData[pushData.frameIndex].viewproj * worldPos;
 }

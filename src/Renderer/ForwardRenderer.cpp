@@ -10,8 +10,8 @@ void SK::ForwardRenderer::createResources(SK::Renderer::RenderContext* renderCon
 	SK::Renderer::GraphicsPipelineDesc opaqueDesc{};
 	opaqueDesc.debugName = "Forward Opaque";
 	opaqueDesc.shaders = {
-		{ "../../shaders/glsl/forward_pbr/forward_pbr_vert.spv", SK::Renderer::ShaderStageFlagBits::VertexShader },
-		{ "../../shaders/glsl/forward_pbr/forward_pbr_frag.spv", SK::Renderer::ShaderStageFlagBits::FragmentShader }
+		{ "../../shaders/glsl/forward/forward_vert.spv", SK::Renderer::ShaderStageFlagBits::VertexShader },
+		{ "../../shaders/glsl/forward/forward_frag.spv", SK::Renderer::ShaderStageFlagBits::FragmentShader }
 	};
 	opaqueDesc.topology = SK::Renderer::PrimitiveTopology::TriangleList;
 	opaqueDesc.polygonMode = SK::Renderer::PolygonMode::Fill;

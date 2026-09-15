@@ -9,18 +9,13 @@ void SK::Asset::registerImported(AssetRegistry* assetRegistry, SK::Material::Mat
     const uint32_t materialBaseIndex = static_cast<uint32_t>(materialRegistry->instances.size());
 
     // Remap imported material texture indices (local -> global texture indices) and register to the MaterialRegistry
-    // Also, from material info, assign texture formats per GLTF 2.0 spec.
     for(auto& mat : importedAsset.materials)
     {
-        importedAsset.textures[mat.materialData.baseColorTexture].description.format = SK::Asset::TextureFormat::RGBA8_SRGB; // baseColor (albedo) texture is in sRGB space.
-        importedAsset.textures[mat.materialData.metallicRoughnessTexture].description.format = SK::Asset::TextureFormat::RGBA8_UNORM; // metallicRoughness texture is in linear space.
-        importedAsset.textures[mat.materialData.normalTexture].description.format = SK::Asset::TextureFormat::RGBA8_UNORM; // normal texture is in linear space.
-        importedAsset.textures[mat.materialData.emissiveTexture].description.format = SK::Asset::TextureFormat::RGBA8_SRGB; // emissive texture is in sRGB space.
-
-        mat.materialData.baseColorTexture += textureBaseIndex;
-        mat.materialData.metallicRoughnessTexture += textureBaseIndex;
-        mat.materialData.normalTexture += textureBaseIndex;
-        mat.materialData.emissiveTexture += textureBaseIndex;
+        mat.materialData.baseColorTexture += (mat.materialData.baseColorTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.metallicRoughnessTexture += (mat.materialData.metallicRoughnessTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.normalTexture += (mat.materialData.normalTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.emissiveTexture += (mat.materialData.emissiveTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
+        mat.materialData.occlusionTexture += (mat.materialData.occlusionTexture != SK::Material::INVALID_TEXTURE) ? textureBaseIndex : 0;
 
         SK::Material::registerInstance(materialRegistry, std::move(mat));
     }

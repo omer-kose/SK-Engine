@@ -203,20 +203,15 @@ bool SK::Asset::importGLTF(std::string_view filePath, ImportedAsset* outAsset)
         RawTexture texture{};
         texture.name = gltfTexture.name.empty() ? fmt::format("gltf_{}_texture_{}", gltfFileName, i) : gltfTexture.name.c_str();
 
-        // Mipmap hint
+        // Mipmap hint and sampler info
         if (gltfTexture.samplerIndex.has_value())
         {
-            const fastgltf::Sampler& sampler = asset.samplers[gltfTexture.samplerIndex.value()];
-            if (sampler.minFilter.has_value())
+            const fastgltf::Sampler& gltfSampler = asset.samplers[gltfTexture.samplerIndex.value()];
+            if (gltfSampler.minFilter.has_value())
             {
-                texture.description.mipmapped = hasMipmapFilter(sampler.minFilter.value());
+                texture.description.mipmapped = hasMipmapFilter(gltfSampler.minFilter.value());
             }
-        }
 
-        // Sampler info (if not provided default values will be used for sampler creation)
-        if (gltfTexture.samplerIndex.has_value())
-        {
-            fastgltf::Sampler& gltfSampler = asset.samplers[gltfTexture.samplerIndex.value()];
             texture.description.minFilter = extractTextureFilter(gltfSampler.minFilter.value_or(fastgltf::Filter::Nearest));
             texture.description.magFilter = extractTextureFilter(gltfSampler.magFilter.value_or(fastgltf::Filter::Nearest));
 
@@ -265,19 +260,35 @@ bool SK::Asset::importGLTF(std::string_view filePath, ImportedAsset* outAsset)
         pbrData.metallicFactor = gltfMat.pbrData.metallicFactor;
         pbrData.roughnessFactor = gltfMat.pbrData.roughnessFactor;
 
+        // Assign material textures. Also, from material info, assign texture formats per GLTF 2.0 spec.
         if (gltfMat.pbrData.baseColorTexture.has_value())
         {
             pbrData.baseColorTexture = static_cast<uint32_t>(gltfMat.pbrData.baseColorTexture->textureIndex);
+            outAsset->textures[pbrData.baseColorTexture].description.format = SK::Asset::TextureFormat::RGBA8_SRGB; // baseColor (albedo) texture is in sRGB space.
         }
 
         if (gltfMat.pbrData.metallicRoughnessTexture.has_value())
         {
             pbrData.metallicRoughnessTexture = static_cast<uint32_t>(gltfMat.pbrData.metallicRoughnessTexture->textureIndex);
+            outAsset->textures[pbrData.metallicRoughnessTexture].description.format = SK::Asset::TextureFormat::RGBA8_UNORM; // metallicRoughness texture is in linear space.
         }
 
         if (gltfMat.normalTexture.has_value())
         {
             pbrData.normalTexture = static_cast<uint32_t>(gltfMat.normalTexture->textureIndex);
+            outAsset->textures[pbrData.normalTexture].description.format = SK::Asset::TextureFormat::RGBA8_UNORM; // normal texture is in linear space.
+        }
+
+        if (gltfMat.emissiveTexture.has_value())
+        {
+            pbrData.emissiveTexture = static_cast<uint32_t>(gltfMat.emissiveTexture->textureIndex);
+            outAsset->textures[pbrData.emissiveTexture].description.format = SK::Asset::TextureFormat::RGBA8_SRGB; // emissive texture is in sRGB space.
+        }
+
+        if (gltfMat.occlusionTexture.has_value())
+        {
+            pbrData.occlusionTexture = static_cast<uint32_t>(gltfMat.occlusionTexture->textureIndex);
+            outAsset->textures[pbrData.occlusionTexture].description.format = SK::Asset::TextureFormat::RGBA8_UNORM; // occlusion texture is in linear space.
         }
 
         mat.materialData = pbrData;

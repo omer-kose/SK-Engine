@@ -4,6 +4,8 @@
 #extension GL_EXT_shader_8bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types : require
 
+#define INVALID_RESOURCE_DESCRIPTOR_HANDLE 0xffffffffu // UINT32_MAX
+
 struct Vertex
 {
 	vec3 position;
@@ -18,19 +20,20 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer
 	Vertex vertices[];
 };
 
-layout(push_constant, scalar) uniform PushConstants
+layout(push_constant, scalar) uniform PushData
 {
 	mat4 worldMatrix;
 	VertexBuffer vertexBuffer;
 	uint frameIndex;
 	uint materialIndex; // Index into the PBRMaterialData buffer
-} pushConstants;
+} pushData;
 
 struct SceneData
 {
 	mat4 view;
 	mat4 proj;
 	mat4 viewproj;
+	vec4 camPos;
 	vec4 ambientColor;
 	vec4 sunlightDirection; //w for sun power
 	vec4 sunlightColor;
@@ -51,11 +54,13 @@ struct PBRData
 	uint metallicRoughnessTexture;
 	uint normalTexture;
 	uint emissiveTexture;
+	uint occlusionTexture;
 	// Sampler ids
 	uint8_t baseColorTextureSampler;
 	uint8_t metallicRoughnessTextureSampler;
 	uint8_t normalTextureSampler;
 	uint8_t emissiveTextureSampler;
+	uint8_t occlusionTextureSampler;
 };
 
 // Bindless Material + Texture resources

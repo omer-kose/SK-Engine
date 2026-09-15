@@ -86,6 +86,27 @@ vec3 computeCookTorranceBRDF(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo,
 	return (diffuse + specular) * radiance * NdotL;  
 }
 
+// Khronos PBR Neutral Tone Mapping
+vec3 PBRNeutralToneMapping( vec3 color ) 
+{
+  const float startCompression = 0.8 - 0.04;
+  const float desaturation = 0.15;
+
+  float x = min(color.r, min(color.g, color.b));
+  float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+  color -= offset;
+
+  float peak = max(color.r, max(color.g, color.b));
+  if (peak < startCompression) return color;
+
+  const float d = 1. - startCompression;
+  float newPeak = 1. - d * d / (peak + d - startCompression);
+  color *= newPeak / peak;
+
+  float g = 1. - 1. / (desaturation * (peak - newPeak) + 1.);
+  return mix(color, newPeak * vec3(1, 1, 1), g);
+}
+
 void main() 
 {
 	PBRData pbrData = pbrMaterials[pushData.materialIndex];
@@ -114,7 +135,8 @@ void main()
 
 	vec3 color = Lo;
 	// Tonemap the result from LDR to HDR
-	color = color / (color + 1.0f);
+	//color = color / (color + 1.0f); // Reinhardt operator
+	color = PBRNeutralToneMapping(color);
 	// Apply gamma correction
 	color = pow(color, vec3(1.0f / 2.2f));
 

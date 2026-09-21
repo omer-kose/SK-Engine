@@ -82,7 +82,6 @@ namespace SK::VkRendererBackend
 		bool isInitialized{ false };
 		uint32_t frameNumber{ 0 };
 		bool windowResizeRequested{ false };
-		float renderScale{ 1.0f };
 		// Vulkan Context
 		VkInstance instance; // Vulkan library handle
 		VkDebugUtilsMessengerEXT debugMessenger; // Vulkan debug output handle

@@ -190,10 +190,6 @@ bool SK::VkRendererBackend::beginFrame(State* vkRendererBackend)
         return false;
     }
 
-    // Set the extent of the image that we are going to draw onto
-    vkRendererBackend->drawExtent.width = std::min(vkRendererBackend->drawImage.imageExtent.width, vkRendererBackend->swapchainExtent.width) * vkRendererBackend->renderScale;
-    vkRendererBackend->drawExtent.height = std::min(vkRendererBackend->drawImage.imageExtent.height, vkRendererBackend->swapchainExtent.height) * vkRendererBackend->renderScale;
-
     // Vulkan handles are just a 64 bit handles/pointers, so its fine to copy them around, but remember that their actual data is handled by vulkan itself.
     VkCommandBuffer cmd = currentFrame.mainCommandBuffer;
 
@@ -574,6 +570,7 @@ void SK::VkRendererBackend::createDrawAndDepthImages(State* vkRendererBackend)
         1
     };
 
+    vkRendererBackend->drawExtent = VkExtent2D{ vkRendererBackend->windowExtent.width, vkRendererBackend->windowExtent.height };
     // Initialize the draw image
     vkRendererBackend->drawImage = createImage(vkRendererBackend, drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     // Initialize the depth image

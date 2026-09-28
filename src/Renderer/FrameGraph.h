@@ -150,7 +150,7 @@ namespace SK::Renderer
 		Declared graphics/compute/copy pass.
 
 	*/
-	struct FrameGraphRenderPass
+	struct FrameGraphPass
 	{
 		const char* name = nullptr;
 		FrameGraphPassExecuteFn execute{};
@@ -318,7 +318,7 @@ namespace SK::Renderer
 
 	struct FrameGraph
 	{
-		std::vector<FrameGraphRenderPass> passes;
+		std::vector<FrameGraphPass> passes;
 		std::vector<FrameGraphResourceEntry> resourceEntries;
 
 		FrameGraphBlackboard blackboard{};
@@ -366,8 +366,8 @@ namespace SK::Renderer
 		void addDependency(FrameGraphPassIndex dependentPass, FrameGraphPassIndex prerequisitePass);
 		void buildEdges();
 		bool topologicalSort(std::vector<FrameGraphPassIndex>& sorted) const;
-		void cull(const std::vector<FrameGraphPassIndex>& sorted) const;
-		bool validateUsage(const FrameGraphResourceUsage& usage, bool reads, bool writes) const;
+		void cull(const std::vector<FrameGraphPassIndex>& sorted);
+		bool validateUsage(const FrameGraphResourceUsage& usage, bool reads, bool writes) const; // used by computeBarriers for debugging purposes
 		void computeBarriers(const std::vector<FrameGraphPassIndex>& sorted);
 	};
 

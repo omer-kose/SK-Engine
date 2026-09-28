@@ -395,12 +395,58 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importBuffer(Bu
 
 bool SK::Renderer::FrameGraph::compile(RenderContext* renderContext)
 {
-    return false;
+    assert(renderContext);
+    assert(!compiled);
+
+    buildEdges();
+
+    std::vector<SK::Renderer::FrameGraphPassIndex> sorted;
+    if (topologicalSort(sorted))
+    {
+        /*
+            Cycle detected. Phase 1 returns false; later diagnostics can
+            report the exact cycle and resource dependency chain.
+        */
+        return false;
+    }
+
+    cull(sorted);
+
+    compiledPlan.sortedPasses = sorted;
+    computeBarriers(sorted);
+
+    compiled = true;
+    return true;
 }
 
 bool SK::Renderer::FrameGraph::execute(RenderContext* renderContext)
 {
-    return false;
+    assert(renderContext);
+    assert(compiled);
+
+    assert(compiledPlan.sortedPasses.size() == compiledPlan.barriers.size());
+
+    for (uint32_t sortedIndex = 0; sortedIndex < compiledPlan.sortedPasses.size(); ++sortedIndex)
+    {
+        const SK::Renderer::FrameGraphPassIndex passIndex = compiledPlan.sortedPasses[sortedIndex];
+        const SK::Renderer::FrameGraphPass& pass = passes[passIndex];
+
+        if (!pass.alive)
+        {
+            continue;
+        }
+
+        // TODO: Execute frame graph barriers
+
+        SK::Renderer::FrameGraphPassContext context{};
+        context.renderContext = renderContext;
+        context.frameGraph = this;
+        context.passIndex = passIndex;
+
+        pass.execute(context);
+    }
+
+    // TODO: Execute final barriers
 }
 
 void SK::Renderer::FrameGraph::addDependency(FrameGraphPassIndex dependentPass, FrameGraphPassIndex prerequisitePass)
@@ -426,7 +472,7 @@ void SK::Renderer::FrameGraph::buildEdges()
 
     for (SK::Renderer::FrameGraphPassIndex passIndex = 0; passIndex < passes.size(); ++passIndex)
     {
-        SK::Renderer::FrameGraphRenderPass& pass = passes[passIndex];
+        SK::Renderer::FrameGraphPass& pass = passes[passIndex];
 
         ++currentStamp; // stamp of this pass.
 
@@ -488,16 +534,161 @@ bool SK::Renderer::FrameGraph::topologicalSort(std::vector<FrameGraphPassIndex>&
     return sorted.size() == passes.size();
 }
 
-void SK::Renderer::FrameGraph::cull(const std::vector<FrameGraphPassIndex>& sorted) const
+void SK::Renderer::FrameGraph::cull(const std::vector<FrameGraphPassIndex>& sorted)
 {
+    for (SK::Renderer::FrameGraphPass& pass : passes)
+    {
+        pass.alive = pass.neverCull || pass.hasSideEffect;
+    }
 
+    // Propagate alive info from implicit roots backwards into the frame graph.
+    for (uint32_t sortedIndex = sorted.size() - 1; sortedIndex >= 0; --sortedIndex)
+    {
+        const SK::Renderer::FrameGraphPassIndex passIndex = sorted[sortedIndex];
+
+        const SK::Renderer::FrameGraphPass& pass = passes[passIndex];
+
+        if (!pass.alive)
+        {
+            continue;
+        }
+
+        for (const SK::Renderer::FrameGraphPassIndex dependency : pass.dependsOn)
+        {
+            passes[dependency].alive = true;
+        }
+    }
 }
 
 bool SK::Renderer::FrameGraph::validateUsage(const FrameGraphResourceUsage& usage, bool reads, bool writes) const
 {
-    return false;
+    if (!usage.resource.isValid() || usage.resource.index >= resourceEntries.size())
+    {
+        return false;
+    }
+
+    if (usage.state == SK::Renderer::FrameGraphResourceState::Undefined || usage.state == SK::Renderer::FrameGraphResourceState::Present)
+    {
+        return false;
+    }
+
+    const SK::Renderer::FrameGraphResourceEntry& entry = resourceEntries[usage.resource.index];
+
+    if (isTextureResource(entry))
+    {
+        if (!isTextureState(usage.state))
+        {
+            return false;
+        }
+    }
+    else
+    {
+        if (!isBufferState(usage.state))
+        {
+            return false;
+        }
+    }
+
+    if (reads && writes && usage.state != SK::Renderer::FrameGraphResourceState::StorageReadWrite)
+    {
+        return false;
+    }
+
+    if (reads && usage.state == FrameGraphResourceState::StorageWrite)
+    {
+        return false;
+    }
+
+    if (writes && usage.state == FrameGraphResourceState::ShaderRead)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 void SK::Renderer::FrameGraph::computeBarriers(const std::vector<FrameGraphPassIndex>& sorted)
 {
+    compiledPlan.barriers.resize(sorted.size());
+
+    for (uint32_t sortedIndex = 0; sortedIndex < sorted.size(); ++sortedIndex)
+    {
+        const SK::Renderer::FrameGraphPassIndex passIndex = sorted[sortedIndex];
+        const SK::Renderer::FrameGraphPass pass = passes[passIndex];
+        
+        if (!pass.alive)
+        {
+            continue;
+        }
+
+        std::vector<SK::Renderer::FrameGraphResourceUsage> usages;
+        usages.resize(pass.reads.size() + pass.writes.size() + pass.readWrites.size());
+
+        for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.reads)
+        {
+            assert(!validateUsage(usage, true, false));
+            appendUniqueUse(usages, usage);
+        }
+
+        for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.writes)
+        {
+            assert(!validateUsage(usage, false, true));
+            appendUniqueUse(usages, usage);
+        }
+
+        for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.reads)
+        {
+            assert(!validateUsage(usage, true, true));
+            appendUniqueUse(usages, usage);
+        }
+
+        std::vector<SK::Renderer::FrameGraphBarrier>& barriers = compiledPlan.barriers[sortedIndex];
+        for (const SK::Renderer::FrameGraphResourceUsage& usage : usages)
+        {
+            SK::Renderer::FrameGraphResourceEntry& entry = resourceEntries[usage.resource.index];
+            if (barrierRequired(entry, usage))
+            {
+                barriers.push_back(SK::Renderer::FrameGraphBarrier{
+                    .resource = usage.resource,
+                    .before = entry.currentState,
+                    .after = usage.state,
+                    .beforeShaderStages = entry.currentShaderStages,
+                    .afterShaderStages = usage.shaderStages
+                });
+            }
+
+            // Usage is processed and if necessary a barrier is put. By the frame graph simulation, now the resource is used by the "usage". Update the resource entry to track the current usage of the resource.
+            entry.currentState = usage.state;
+            entry.currentShaderStages = usage.shaderStages;
+        }
+    }
+
+    for (SK::Renderer::FrameGraphResourceIndex resourceIndex = 0; resourceIndex < resourceEntries.size(); ++resourceIndex)
+    {
+        SK::Renderer::FrameGraphResourceEntry& entry = resourceEntries[resourceIndex];
+
+        if (!entry.imported || !entry.finalState.has_value())
+        {
+            continue;
+        }
+
+        const SK::Renderer::FrameGraphResourceState requiredState = entry.finalState.value();
+        const bool requiresFinalBarrier = entry.currentState != requiredState || stateHasWriteAccess(entry.currentState);
+
+        if (!requiresFinalBarrier)
+        {
+            continue;
+        }
+
+        compiledPlan.finalBarriers.push_back(SK::Renderer::FrameGraphBarrier{
+            .resource = { resourceIndex },
+            .before = entry.currentState,
+            .after = requiredState,
+            .beforeShaderStages = entry.currentShaderStages,
+            .afterShaderStages = SK::Renderer::ShaderStageFlagBits::None
+        });
+
+        entry.currentState = requiredState;
+        entry.currentShaderStages = SK::Renderer::ShaderStageFlagBits::None;
+    }
 }

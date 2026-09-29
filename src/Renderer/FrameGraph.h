@@ -103,7 +103,7 @@ namespace SK::Renderer
 		/*
 			Needed for shader-resource barrier lowering. Attachment, transfer, vertex/index buffer and present states usually use None.
 		*/
-		ShaderStageFlags currentShaderStages = ShaderStageFlagBits::None;
+		ShaderStageFlags currentShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(ShaderStageFlagBits::None);
 
 		/*
 			Optional required state after the graph is done. This is mainly used by the imported resources which must finished in a certain state (such as swapchain must finish in Present state).
@@ -123,7 +123,7 @@ namespace SK::Renderer
 	{
 		FrameGraphResourceHandle resource{};
 		FrameGraphResourceState state = FrameGraphResourceState::Undefined;
-		ShaderStageFlags shaderStages = ShaderStageFlagBits::None;
+		ShaderStageFlags shaderStages = static_cast<SK::Renderer::ShaderStageFlags>(ShaderStageFlagBits::None);
 	};
 
 	/*
@@ -136,8 +136,8 @@ namespace SK::Renderer
 		FrameGraphResourceState before = FrameGraphResourceState::Undefined;
 		FrameGraphResourceState after = FrameGraphResourceState::Undefined;
 
-		ShaderStageFlags beforeShaderStages = ShaderStageFlagBits::None;
-		ShaderStageFlags afterShaderStages = ShaderStageFlagBits::None;
+		ShaderStageFlags beforeShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(ShaderStageFlagBits::None);
+		ShaderStageFlags afterShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(ShaderStageFlagBits::None);
 	};
 
 	struct FrameGraph;
@@ -255,7 +255,7 @@ namespace SK::Renderer
 		}
 
 		template<typename T>
-		T* tryGet()
+		const T* tryGet()
 		{
 			const auto found = entryIndexByType.find(typeid(T));
 			if (found == entryIndexByType.end())
@@ -304,8 +304,8 @@ namespace SK::Renderer
 		void readTexture(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages);
 		void readBuffer(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages);
 
-		void writeTexture(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages = ShaderStageFlagBits::None);
-		void writeBuffer(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages = ShaderStageFlagBits::None);
+		void writeTexture(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages = static_cast<SK::Renderer::ShaderStageFlags>(ShaderStageFlagBits::None));
+		void writeBuffer(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages = static_cast<SK::Renderer::ShaderStageFlags>(ShaderStageFlagBits::None));
 
 		void readWriteTexture(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages);
 		void readWriteBuffer(FrameGraphResourceHandle resource, FrameGraphResourceState state, ShaderStageFlags shaderStages);

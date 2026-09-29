@@ -5,6 +5,8 @@
 namespace SK::Renderer
 {
 	struct GPUSceneData;
+	struct FrameGraph;
+	struct FrameGraphBarrier;
 }
 
 namespace SK::Renderer
@@ -29,15 +31,36 @@ namespace SK::Renderer
 		uint32_t id;
 	};
 
-	using ShaderStageFlags = uint32_t;
-
-	enum ShaderStageFlagBits : uint32_t
+	enum class ShaderStageFlagBits : uint32_t
 	{
 		None = 0,
-		VertexShader = 1 << 0,
-		FragmentShader = 1 << 1,
-		ComputeShader = 1 << 2,
+		VertexShader = 1u << 0,
+		FragmentShader = 1u << 1,
+		ComputeShader = 1u << 2,
 	};
+	using ShaderStageFlags = uint32_t;
+
+	constexpr ShaderStageFlags operator|(ShaderStageFlagBits lhs, ShaderStageFlagBits rhs)
+	{
+		return static_cast<ShaderStageFlags>(lhs) | static_cast<ShaderStageFlags>(rhs);
+	}
+
+	constexpr ShaderStageFlags& operator|=(ShaderStageFlags& lhs, ShaderStageFlagBits rhs)
+	{
+		lhs |= static_cast<ShaderStageFlags>(rhs);
+		return lhs;
+	}
+
+	constexpr ShaderStageFlags operator&(ShaderStageFlagBits lhs, ShaderStageFlagBits rhs)
+	{
+		return static_cast<ShaderStageFlags>(lhs) & static_cast<ShaderStageFlags>(rhs);
+	}
+
+	constexpr ShaderStageFlags& operator&=(ShaderStageFlags& lhs, ShaderStageFlagBits rhs)
+	{
+		lhs &= static_cast<ShaderStageFlags>(rhs);
+		return lhs;
+	}
 
 	struct ShaderDesc
 	{
@@ -385,6 +408,8 @@ namespace SK::Renderer
 
 		BufferHandle (*createBuffer)(RenderContext* renderContext, const BufferDesc& desc);
 		TextureHandle(*createTexture)(RenderContext* renderContext, const TextureDesc& desc);
+
+		void (*executeFrameGraphBarriers)(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);
 	};
 
 	// Render Context packs up data (state) and functionality of the Graphics API backend. It provides functionality and hides the backend details.
@@ -426,4 +451,6 @@ namespace SK::Renderer
 
 	BufferHandle createBuffer(RenderContext* renderContext, const BufferDesc& desc);
 	TextureHandle createTexture(RenderContext* renderContext, const TextureDesc& desc);
+
+	void executeFrameGraphBarriers(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);
 }

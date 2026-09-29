@@ -354,7 +354,7 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importTexture(T
     entry.backendHandle = texture;
     entry.versions.push_back({});
     entry.currentState = initialState;
-    entry.currentShaderStages = SK::Renderer::ShaderStageFlagBits::None;
+    entry.currentShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None);
     entry.finalState = finalState;
     entry.imported = true;
     entry.debugName = debugName;
@@ -383,7 +383,7 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importBuffer(Bu
     entry.backendHandle = buffer;
     entry.versions.push_back({});
     entry.currentState = initialState;
-    entry.currentShaderStages = SK::Renderer::ShaderStageFlagBits::None;
+    entry.currentShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None);
     entry.finalState = finalState;
     entry.imported = true;
     entry.debugName = debugName;
@@ -436,7 +436,7 @@ bool SK::Renderer::FrameGraph::execute(RenderContext* renderContext)
             continue;
         }
 
-        // TODO: Execute frame graph barriers
+        executeFrameGraphBarriers(renderContext, *this, compiledPlan.barriers[sortedIndex]);
 
         SK::Renderer::FrameGraphPassContext context{};
         context.renderContext = renderContext;
@@ -446,7 +446,7 @@ bool SK::Renderer::FrameGraph::execute(RenderContext* renderContext)
         pass.execute(context);
     }
 
-    // TODO: Execute final barriers
+    executeFrameGraphBarriers(renderContext, *this, compiledPlan.finalBarriers);
 }
 
 void SK::Renderer::FrameGraph::addDependency(FrameGraphPassIndex dependentPass, FrameGraphPassIndex prerequisitePass)
@@ -567,6 +567,12 @@ bool SK::Renderer::FrameGraph::validateUsage(const FrameGraphResourceUsage& usag
         return false;
     }
 
+    /*
+        Why did Undefined excluded: Undefined isn't something a pass does. No draw or dispatch operates in undefined state. It is only meaningful as a "before" value the graph compute internally
+        (the imported buffer inital state or the barrier before field).
+
+        Why did Present excluded: Present never appears as a pass usage. It only appears as a "final state". It is handled explicitly in computeBarriers() while putting final barriers. 
+    */
     if (usage.state == SK::Renderer::FrameGraphResourceState::Undefined || usage.state == SK::Renderer::FrameGraphResourceState::Present)
     {
         return false;
@@ -636,7 +642,7 @@ void SK::Renderer::FrameGraph::computeBarriers(const std::vector<FrameGraphPassI
             appendUniqueUse(usages, usage);
         }
 
-        for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.reads)
+        for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.readWrites)
         {
             assert(!validateUsage(usage, true, true));
             appendUniqueUse(usages, usage);
@@ -685,10 +691,10 @@ void SK::Renderer::FrameGraph::computeBarriers(const std::vector<FrameGraphPassI
             .before = entry.currentState,
             .after = requiredState,
             .beforeShaderStages = entry.currentShaderStages,
-            .afterShaderStages = SK::Renderer::ShaderStageFlagBits::None
+            .afterShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None)
         });
 
         entry.currentState = requiredState;
-        entry.currentShaderStages = SK::Renderer::ShaderStageFlagBits::None;
+        entry.currentShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None);
     }
 }

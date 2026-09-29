@@ -101,6 +101,15 @@ SK::Renderer::TextureHandle SK::Renderer::createTexture(RenderContext* renderCon
 	return renderContext->api->createTexture(renderContext, desc);
 }
 
+void SK::Renderer::executeFrameGraphBarriers(RenderContext* renderContext, const FrameGraph& fg, const std::vector<FrameGraphBarrier>& barriers)
+{
+	assert(renderContext);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->executeFrameGraphBarriers != nullptr);
+
+	renderContext->api->executeFrameGraphBarriers(renderContext, fg, barriers);
+}
+
 void SK::Renderer::beginMainRendering(RenderContext* renderContext)
 {
 	assert(renderContext != nullptr);

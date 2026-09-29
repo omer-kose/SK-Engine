@@ -1,6 +1,7 @@
 #include "VkRenderContext.h"
 
 #include <Renderer/RenderContext.h>
+#include <Renderer/FrameGraph.h>
 
 #include <RendererBackend/Vulkan/VkAssetRegistry.h>
 #include <RendererBackend/Vulkan/VkInitializers.h>
@@ -23,13 +24,14 @@ static VkShaderStageFlagBits toVkShaderStageFlagBits(SK::Renderer::ShaderStageFl
 {
 	switch (stage)
 	{
-	case SK::Renderer::VertexShader:
+	case SK::Renderer::ShaderStageFlagBits::VertexShader:
 		return VK_SHADER_STAGE_VERTEX_BIT;
-	case SK::Renderer::FragmentShader:
+	case SK::Renderer::ShaderStageFlagBits::FragmentShader:
 		return VK_SHADER_STAGE_FRAGMENT_BIT;
-	case SK::Renderer::ComputeShader:
+	case SK::Renderer::ShaderStageFlagBits::ComputeShader:
 		return VK_SHADER_STAGE_COMPUTE_BIT;
 	default:
+		assert("Given shader stage flag bit does not match with any of the Vulkan shader stage flag bits.");
 		return static_cast<VkShaderStageFlagBits>(0);;
 	}
 }
@@ -38,21 +40,22 @@ static VkShaderStageFlags toVkShaderStageFlags(SK::Renderer::ShaderStageFlags st
 {
 	VkShaderStageFlags vkStages = 0;
 
-	if ((stages & SK::Renderer::ShaderStageFlagBits::VertexShader) != 0)
+	if ((stages & static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::VertexShader)) != 0)
 	{
 		vkStages |= VK_SHADER_STAGE_VERTEX_BIT;
 	}
 
-	if ((stages & SK::Renderer::ShaderStageFlagBits::FragmentShader) != 0)
+	if ((stages & static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::FragmentShader)) != 0)
 	{
 		vkStages |= VK_SHADER_STAGE_FRAGMENT_BIT;
 	}
 
-	if ((stages & SK::Renderer::ShaderStageFlagBits::ComputeShader) != 0)
+	if ((stages & static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::ComputeShader)) != 0)
 	{
 		vkStages |= VK_SHADER_STAGE_COMPUTE_BIT;
 	}
 
+	assert(vkStages != 0 && "Given shader stage input does not match with any of the Vulkan shader stages.");
 	return vkStages;
 }
 
@@ -198,7 +201,7 @@ static size_t hashGraphicsPipelineDesc(const SK::Renderer::GraphicsPipelineDesc&
 	for (const SK::Renderer::ShaderDesc& shaderDesc : desc.shaders)
 	{
 		hashCombine(&hash, hashString(shaderDesc.path));
-		hashCombine(&hash, shaderDesc.stage);
+		hashCombine(&hash, static_cast<size_t>(shaderDesc.stage));
 	}
 
 	hashCombine(&hash, integerHasher(static_cast<uint64_t>(desc.topology)));
@@ -613,8 +616,6 @@ static VkFormat toVkFormat(SK::Renderer::Format format)
 	case SK::Renderer::Format::RG11B10Float:               return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 
 	case SK::Renderer::Format::Depth16Unorm:               return VK_FORMAT_D16_UNORM;
-	// Not guaranteed supported on all Vulkan implementations - query
-	// vkGetPhysicalDeviceFormatProperties before relying on this one.
 	case SK::Renderer::Format::Depth24UnormStencil8Uint:   return VK_FORMAT_D24_UNORM_S8_UINT;
 	case SK::Renderer::Format::Depth32Float:               return VK_FORMAT_D32_SFLOAT;
 	case SK::Renderer::Format::Depth32FloatStencil8Uint:   return VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -793,6 +794,194 @@ static SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderContext* r
 	vkRenderContext->textures.push_back(textureRecord);
 
 	return SK::Renderer::TextureHandle{ textureIndex };
+}
+
+struct StateSync
+{
+	VkPipelineStageFlags2 stage = VK_PIPELINE_STAGE_2_NONE;
+	VkAccessFlags2 access = VK_ACCESS_2_NONE;
+	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED; // ignored for buffers.
+};
+
+static constexpr VkAccessFlags2 WRITE_ACCESS_MASK =
+	VK_ACCESS_2_MEMORY_WRITE_BIT |
+	VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+	VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+	VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
+static bool isDepthFormat(const SK::Renderer::TextureDesc desc)
+{
+	return toVkFormat(desc.format) == VK_FORMAT_D32_SFLOAT;
+
+	switch (toVkFormat(desc.format))
+	{
+		case VK_FORMAT_D16_UNORM:
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+		case VK_FORMAT_D32_SFLOAT:
+		case VK_FORMAT_D32_SFLOAT_S8_UINT:
+			return true;
+		default:
+			return false;
+	}
+}
+
+static StateSync lowerState(
+	SK::Renderer::FrameGraphResourceState state,
+	SK::Renderer::ShaderStageFlags shaderStages,
+	bool isTexture,
+	bool depthFormat
+)
+{
+	using State = SK::Renderer::FrameGraphResourceState;
+
+	switch (state)
+	{
+		case State::ColorAttachment:
+			return { VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+					 VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+					 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+		case State::DepthStencilAttachment:
+			return { VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+					 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+
+		case State::ShaderRead:
+			return { toVkShaderStageFlags(shaderStages),
+					 isTexture ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+					 !depthFormat ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL };
+
+		case State::StorageRead:
+			return { toVkShaderStageFlags(shaderStages), VK_ACCESS_2_SHADER_STORAGE_READ_BIT, VK_IMAGE_LAYOUT_GENERAL };
+
+		case State::StorageWrite:
+			return { toVkShaderStageFlags(shaderStages), VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL };
+
+		case State::StorageReadWrite:
+			return { toVkShaderStageFlags(shaderStages),
+					 VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+					 VK_IMAGE_LAYOUT_GENERAL };
+
+		case State::TransferRead:
+			return { VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
+
+		case State::TransferWrite:
+			return { VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL };
+
+		case State::VertexBuffer:
+			return { VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT, VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT, {} };
+
+		case State::IndexBuffer:
+			return { VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT, VK_ACCESS_2_INDEX_READ_BIT, {} };
+
+		case State::UniformBuffer:
+			return { toVkShaderStageFlags(shaderStages), VK_ACCESS_2_UNIFORM_READ_BIT, {} };
+
+		case State::IndirectBuffer:
+			return { VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT, {} };
+
+		case State::Present:
+			return { VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+
+		case State::Undefined:
+		default:
+			/*
+				Only reachable as a "before" state, and only for buffers
+				(see importBuffer). Conservative: flush everything so an
+				unknown prior writer is still synchronized against.
+			*/
+			return { VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED };
+	}
+}
+
+/*
+	Barrier execution follows the suggestion given in the Vulkan spec: 
+	Global memory barrier covers all resources. Generally considered more efficient to do a global memory barrier than per-resource barriers, per-resource barriers should usually be used for queue ownership transfers 
+	and image layout transitions, otherwise use global barriers.
+*/
+static void executeFrameGraphBarriers_(SK::Renderer::RenderContext *renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	if (barriers.empty())
+	{
+		return;
+	}
+
+	VkPipelineStageFlags2 globalSrcStage = VK_PIPELINE_STAGE_2_NONE;
+	VkPipelineStageFlags2 globalDstStage = VK_PIPELINE_STAGE_2_NONE;
+	VkAccessFlags2 globalSrcAccess = VK_ACCESS_2_NONE;
+	VkAccessFlags2 globalDstAccess = VK_ACCESS_2_NONE;
+	bool needGlobalBarrier = false;
+
+	std::vector<VkImageMemoryBarrier2> imageBarriers;
+	imageBarriers.reserve(barriers.size());
+
+	for (const SK::Renderer::FrameGraphBarrier& barrier : barriers)
+	{
+		const SK::Renderer::FrameGraphResourceEntry& entry = fg.resourceEntries[barrier.resource.index];
+		const bool isTexture = std::holds_alternative<SK::Renderer::TextureDesc>(entry.desc);
+		const bool depthFormat = isTexture && isDepthFormat(std::get<SK::Renderer::TextureDesc>(entry.desc));
+
+		StateSync src = lowerState(barrier.before, barrier.beforeShaderStages, isTexture, depthFormat);
+		const StateSync dst = lowerState(barrier.after, barrier.afterShaderStages, isTexture, depthFormat);
+
+		/*
+			Reads never need flushing: A read doesn't dirty any cache lines, so there's nothing to flush on its behalf. 
+			"Availability" is a property of a write's result, not of a read. Only writes need to be made available by flushing.
+		*/
+		src.access &= WRITE_ACCESS_MASK; // masking with write flags. src's access flag will be non-zero if it writes to the memory.
+
+		const bool requiresLayoutTransition = isTexture && (src.layout != dst.layout);
+
+		if (requiresLayoutTransition)
+		{
+			// Layout transition requires an image barrier.
+			const SK::VkRendererBackend::TextureRecord& texture = vkRenderContext->textures[std::get<SK::Renderer::TextureHandle>(entry.backendHandle).id];
+			imageBarriers.push_back(VkImageMemoryBarrier2{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.srcStageMask = src.stage,
+				.srcAccessMask = src.access,
+				.dstStageMask = dst.stage,
+				.dstAccessMask = dst.access,
+				.oldLayout = src.layout,
+				.newLayout = dst.layout,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = texture.image.image,
+				.subresourceRange = {
+					.aspectMask = !depthFormat ? static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_COLOR_BIT) : static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT),
+					.baseMipLevel = 0, .levelCount = VK_REMAINING_MIP_LEVELS,
+					.baseArrayLayer = 0, .layerCount = VK_REMAINING_ARRAY_LAYERS
+				}
+			});
+		}
+		else
+		{
+			// Buffers and non-layout transitioning textures: fold into one global barrier.
+			globalSrcStage |= src.stage;
+			globalSrcAccess |= src.access;
+			globalDstStage |= dst.stage;
+			globalDstAccess |= dst.access;
+			needGlobalBarrier = true;
+		}
+	}
+
+	VkMemoryBarrier2 globalBarrier{
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.srcStageMask = globalSrcStage, .srcAccessMask = globalSrcAccess,
+		.dstStageMask = globalDstStage, .dstAccessMask = globalDstAccess,
+	};
+
+	VkDependencyInfo dep{ .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+	dep.memoryBarrierCount = needGlobalBarrier ? 1 : 0;
+	dep.pMemoryBarriers = needGlobalBarrier ? &globalBarrier : nullptr;
+	dep.imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size());
+	dep.pImageMemoryBarriers = imageBarriers.data();
+
+	VkCommandBuffer cmd = vkRendererBackend->currentCmdBuffer;
+	vkCmdPipelineBarrier2(cmd, &dep);
 }
 
 void SK::VkRendererBackend::initVkRenderContext(VkRenderContext* vkRenderContext, State* vkRendererBackend, VkSceneResources* vkSceneResources)

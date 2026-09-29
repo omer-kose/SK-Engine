@@ -57,6 +57,16 @@ static bool isBufferState(SK::Renderer::FrameGraphResourceState state)
     }
 }
 
+/*
+    Undefined state is only valid while importing, as import state describes what state does this resource start the graph in. For some resources, the answer could be simply unknown or untracked.
+
+    For example, main render targets and swapchain images start in undefined state with undefined image layouts.
+*/
+static bool isValidImportState(SK::Renderer::FrameGraphResourceState s, bool isTexture)
+{
+    return s == SK::Renderer::FrameGraphResourceState::Undefined || (isTexture ? isTextureState(s) : isBufferState(s));
+}
+
 static bool stateHasWriteAccess(SK::Renderer::FrameGraphResourceState state)
 {
     using State = SK::Renderer::FrameGraphResourceState;
@@ -344,7 +354,7 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importTexture(T
     assert(compiled == false);
     assert(texture.id != INVALID_HANDLE);
     assert(debugName != nullptr);
-    assert(isTextureState(initialState));
+    assert(isValidImportState(initialState, true));
     assert(finalState.has_value() ? isTextureState(finalState.value()) : true);
 
     const SK::Renderer::FrameGraphResourceIndex resourceIndex = static_cast<SK::Renderer::FrameGraphResourceIndex>(resourceEntries.size());
@@ -369,11 +379,7 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importBuffer(Bu
     assert(compiled == false);
     assert(buffer.id != INVALID_HANDLE);
     assert(debugName != nullptr);
-    /*
-        Differently from texture resources, undefined state is allowed as the initial buffer state. This is because buffers have no layouts. While, in theory, a texture could also start in an undefined state
-        and could be used in a pass, if that pass requires a layout transition, the state of the texture must be known. This is because image layouts are inferred from the access flags.
-    */
-    assert(initialState == SK::Renderer::FrameGraphResourceState::Undefined || isBufferState(initialState));
+    assert(isValidImportState(initialState, false));
     assert(finalState.has_value() ? isBufferState(finalState.value()) : true);
 
     const SK::Renderer::FrameGraphResourceIndex resourceIndex = static_cast<SK::Renderer::FrameGraphResourceIndex>(resourceEntries.size());

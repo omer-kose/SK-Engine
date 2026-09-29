@@ -35,7 +35,7 @@ namespace SK::Renderer
 	*/
 	enum class FrameGraphResourceState : uint8_t
 	{
-		//no tracked prior access
+		// no tracked prior access
 		Undefined = 0,
 
 		// Texture attachment use

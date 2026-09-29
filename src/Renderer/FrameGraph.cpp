@@ -215,7 +215,7 @@ SK::Renderer::TextureHandle SK::Renderer::FrameGraphPassContext::getTexture(Fram
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry entry = frameGraph->resourceEntries[resource.index];
     assert(isTextureResource(entry));
@@ -227,7 +227,7 @@ SK::Renderer::BufferHandle SK::Renderer::FrameGraphPassContext::getBuffer(FrameG
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry entry = frameGraph->resourceEntries[resource.index];
     assert(isBufferResource(entry));
@@ -239,10 +239,10 @@ void SK::Renderer::FrameGraphPassBuilder::readTexture(FrameGraphResourceHandle r
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry& entry = frameGraph->resourceEntries[resource.index];
-    assert(isTextureResource(entry.backendHandle));
+    assert(isTextureResource(entry));
 
     appendReadUsage(frameGraph, passIndex, resource, state, shaderStages);
 }
@@ -251,10 +251,10 @@ void SK::Renderer::FrameGraphPassBuilder::readBuffer(FrameGraphResourceHandle re
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry& entry = frameGraph->resourceEntries[resource.index];
-    assert(isBufferResource(entry.backendHandle));
+    assert(isBufferResource(entry));
 
     appendReadUsage(frameGraph, passIndex, resource, state, shaderStages);
 }
@@ -263,10 +263,10 @@ void SK::Renderer::FrameGraphPassBuilder::writeTexture(FrameGraphResourceHandle 
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry& entry = frameGraph->resourceEntries[resource.index];
-    assert(isTextureResource(entry.backendHandle));
+    assert(isTextureResource(entry));
 
     appendWriteUsage(frameGraph, passIndex, resource, state, shaderStages, false);
 }
@@ -275,10 +275,10 @@ void SK::Renderer::FrameGraphPassBuilder::writeBuffer(FrameGraphResourceHandle r
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry& entry = frameGraph->resourceEntries[resource.index];
-    assert(isBufferResource(entry.backendHandle));
+    assert(isBufferResource(entry));
 
     appendWriteUsage(frameGraph, passIndex, resource, state, shaderStages, false);
 }
@@ -287,10 +287,10 @@ void SK::Renderer::FrameGraphPassBuilder::readWriteTexture(FrameGraphResourceHan
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry& entry = frameGraph->resourceEntries[resource.index];
-    assert(isTextureResource(entry.backendHandle));
+    assert(isTextureResource(entry));
 
     appendWriteUsage(frameGraph, passIndex, resource, state, shaderStages, true);
 }
@@ -299,10 +299,10 @@ void SK::Renderer::FrameGraphPassBuilder::readWriteBuffer(FrameGraphResourceHand
 {
     assert(frameGraph != nullptr);
     assert(resource.isValid());
-    assert(resource.index < frameGraph->entries.size());
+    assert(resource.index < frameGraph->resourceEntries.size());
 
     const SK::Renderer::FrameGraphResourceEntry& entry = frameGraph->resourceEntries[resource.index];
-    assert(isBufferResource(entry.backendHandle));
+    assert(isBufferResource(entry));
 
     appendWriteUsage(frameGraph, passIndex, resource, state, shaderStages, true);
 }
@@ -345,7 +345,7 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importTexture(T
     assert(texture.id != INVALID_HANDLE);
     assert(debugName != nullptr);
     assert(isTextureState(initialState));
-    assert(finalState.has_value() ? isTextureResource(finalState.value()) : true);
+    assert(finalState.has_value() ? isTextureState(finalState.value()) : true);
 
     const SK::Renderer::FrameGraphResourceIndex resourceIndex = static_cast<SK::Renderer::FrameGraphResourceIndex>(resourceEntries.size());
 
@@ -367,14 +367,14 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importTexture(T
 SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importBuffer(BufferHandle buffer, const BufferDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName)
 {
     assert(compiled == false);
-    assert(texture.id != INVALID_HANDLE);
+    assert(buffer.id != INVALID_HANDLE);
     assert(debugName != nullptr);
     /*
         Differently from texture resources, undefined state is allowed as the initial buffer state. This is because buffers have no layouts. While, in theory, a texture could also start in an undefined state
         and could be used in a pass, if that pass requires a layout transition, the state of the texture must be known. This is because image layouts are inferred from the access flags.
     */
     assert(initialState == SK::Renderer::FrameGraphResourceState::Undefined || isBufferState(initialState));
-    assert(finalState.has_value() ? isBufferResource(finalState) : true);
+    assert(finalState.has_value() ? isBufferState(finalState.value()) : true);
 
     const SK::Renderer::FrameGraphResourceIndex resourceIndex = static_cast<SK::Renderer::FrameGraphResourceIndex>(resourceEntries.size());
 
@@ -419,7 +419,7 @@ bool SK::Renderer::FrameGraph::compile(RenderContext* renderContext)
     return true;
 }
 
-bool SK::Renderer::FrameGraph::execute(RenderContext* renderContext)
+void SK::Renderer::FrameGraph::execute(RenderContext* renderContext)
 {
     assert(renderContext);
     assert(compiled);

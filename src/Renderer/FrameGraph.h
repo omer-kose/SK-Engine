@@ -358,7 +358,7 @@ namespace SK::Renderer
 		}
 
 		bool compile(RenderContext* renderContext);
-		bool execute(RenderContext* renderContext);
+		void execute(RenderContext* renderContext);
 
 		// Internal Helpers
 		friend struct FrameGraphPassBuilder;

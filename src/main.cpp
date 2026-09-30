@@ -87,6 +87,7 @@ int main(int argc, char* argv[])
         }
 
         // RendererBackend checks for a resize requirement every frame internally
+        // TODO: Make this API agnostic.
         if(vkRendererBackend.windowResizeRequested)
         {
             SK::VkRendererBackend::handleWindowResize(&vkRendererBackend);

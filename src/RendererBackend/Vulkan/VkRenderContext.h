@@ -24,6 +24,7 @@ namespace SK::VkRendererBackend
 	{
 		AllocatedBuffer buffer;
 		const char* debugName = nullptr;
+		SK::Renderer::BufferDesc desc{}; // cached
 	};
 
 	struct TextureRecord
@@ -31,6 +32,7 @@ namespace SK::VkRendererBackend
 		AllocatedImage image;
 		uint8_t samplerIndex; // descriptor index of the sampler
 		const char* debugName = nullptr;
+		SK::Renderer::TextureDesc desc{}; // cached
 	};
 
 	/*

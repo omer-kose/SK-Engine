@@ -711,8 +711,10 @@ static SK::Renderer::BufferHandle createBuffer_(SK::Renderer::RenderContext* ren
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
 	SK::VkRendererBackend::BufferRecord bufferRecord;
 	bufferRecord.debugName = desc.debugName;
+	bufferRecord.desc = desc;
 
 	if (!desc.data)
 	{
@@ -763,6 +765,8 @@ static SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderContext* r
 
 	SK::VkRendererBackend::TextureRecord textureRecord;
 	textureRecord.debugName = textureDesc.debugName;
+	textureRecord.desc = textureDesc;
+
 	if (textureDesc.data)
 	{
 		textureRecord.image = SK::VkRendererBackend::createImage(

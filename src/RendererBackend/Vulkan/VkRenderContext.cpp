@@ -1021,18 +1021,18 @@ static void registerBackendInternalImages_(SK::VkRendererBackend::VkRenderContex
 	vkRenderContext->swapchainImageHandle = registerExternalTexture(swapchainDesc, vkRendererBackend->swapchainImages[0], vkRendererBackend->swapchainImageViews[0]);
 
 	SK::Renderer::TextureDesc drawImageDesc{};
-	swapchainDesc.imageExtent = { vkRendererBackend->drawExtent.width, vkRendererBackend->drawExtent.height, 1 };
-	swapchainDesc.format = SK::Renderer::Format::RGBA16Float; 
-	swapchainDesc.usage = SK::Renderer::TextureUsage::ColorAttachment | SK::Renderer::TextureUsage::Storage
+	drawImageDesc.imageExtent = { vkRendererBackend->drawExtent.width, vkRendererBackend->drawExtent.height, 1 };
+	drawImageDesc.format = SK::Renderer::Format::RGBA16Float;
+	drawImageDesc.usage = SK::Renderer::TextureUsage::ColorAttachment | SK::Renderer::TextureUsage::Storage
 						| SK::Renderer::TextureUsage::TransferSrc | SK::Renderer::TextureUsage::TransferDst;
-	swapchainDesc.debugName = "DrawImage";
+	drawImageDesc.debugName = "DrawImage";
 	vkRenderContext->mainDrawImageHandle = registerExternalTexture(drawImageDesc, vkRendererBackend->drawImages[0].image, vkRendererBackend->drawImages[0].imageView);
 
 	SK::Renderer::TextureDesc depthImageDesc{};
-	swapchainDesc.imageExtent = { vkRendererBackend->drawExtent.width, vkRendererBackend->drawExtent.height, 1 };
-	swapchainDesc.format = SK::Renderer::Format::Depth32Float;
-	swapchainDesc.usage = SK::Renderer::TextureUsage::DepthStencilAttachment;
-	swapchainDesc.debugName = "DepthImage";
+	depthImageDesc.imageExtent = { vkRendererBackend->drawExtent.width, vkRendererBackend->drawExtent.height, 1 };
+	depthImageDesc.format = SK::Renderer::Format::Depth32Float;
+	depthImageDesc.usage = SK::Renderer::TextureUsage::DepthStencilAttachment;
+	depthImageDesc.debugName = "DepthImage";
 	vkRenderContext->mainDepthImageHandle = registerExternalTexture(depthImageDesc, vkRendererBackend->depthImages[0].image, vkRendererBackend->depthImages[0].imageView);
 }
 
@@ -1044,6 +1044,8 @@ void SK::VkRendererBackend::initVkRenderContext(VkRenderContext* vkRenderContext
 	vkRenderContext->pipelineIndexByHash.clear();
 	vkRenderContext->buffers.clear();
 	vkRenderContext->textures.clear();
+
+	registerBackendInternalImages_(vkRenderContext);
 }
 
 SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderContext* vkRenderContext)
@@ -1084,14 +1086,17 @@ void SK::VkRendererBackend::clearVkRenderContext(VkRenderContext* vkRenderContex
 {
 	if (vkRenderContext->vkRendererBackend != nullptr)
 	{
-		for (BufferRecord& bufferRecord : vkRenderContext->buffers)
+		for (size_t i = 0; i < vkRenderContext->buffers.size(); ++i)
 		{
-			SK::VkRendererBackend::destroyBuffer(vkRenderContext->vkRendererBackend, bufferRecord.buffer);
+			SK::VkRendererBackend::destroyBuffer(vkRenderContext->vkRendererBackend, vkRenderContext->buffers[i].buffer);
 		}
 
-		for (TextureRecord& textureRecord : vkRenderContext->textures)
+		for (size_t i = 0; i < vkRenderContext->textures.size(); ++i)
 		{
-			SK::VkRendererBackend::destroyImage(vkRenderContext->vkRendererBackend, textureRecord.image);
+			if (i != vkRenderContext->swapchainImageHandle.id && i != vkRenderContext->mainDrawImageHandle.id && i != vkRenderContext->mainDepthImageHandle.id)
+			{
+				SK::VkRendererBackend::destroyImage(vkRenderContext->vkRendererBackend, vkRenderContext->textures[i].image);
+			}
 		}
 	}
 

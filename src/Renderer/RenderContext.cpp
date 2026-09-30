@@ -29,7 +29,7 @@ uint32_t SK::Renderer::getFrameNumber(RenderContext* renderContext)
 	return renderContext->api->getFrameNumber(renderContext);
 }
 
-uint32_t SK::Renderer::getFrameIndex(RenderContext* renderContext)
+uint8_t SK::Renderer::getFrameIndex(RenderContext* renderContext)
 {
 	assert(renderContext != nullptr);
 	assert(renderContext->api != nullptr);

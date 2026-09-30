@@ -382,7 +382,7 @@ namespace SK::Renderer
 		PipelineHandle (*getComputePipeline)(RenderContext* renderContext, const ComputePipelineDesc& desc);
 
 		uint32_t (*getFrameNumber)(RenderContext* renderContext);
-		uint32_t (*getFrameIndex)(RenderContext* renderContext);
+		uint8_t (*getFrameIndex)(RenderContext* renderContext);
 
 		bool (*beginFrame)(RenderContext* renderContext);
 		void (*endFrame)(RenderContext* renderContext);
@@ -425,7 +425,7 @@ namespace SK::Renderer
 	PipelineHandle getComputePipeline(RenderContext* renderContext, const ComputePipelineDesc& desc);
 
 	uint32_t getFrameNumber(RenderContext* renderContext);
-	uint32_t getFrameIndex(RenderContext* renderContext);
+	uint8_t getFrameIndex(RenderContext* renderContext);
 
 	bool beginFrame(RenderContext* renderContext);
 	void endFrame(RenderContext* renderContext);

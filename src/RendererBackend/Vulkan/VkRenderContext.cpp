@@ -280,8 +280,8 @@ static SK::Renderer::PipelineHandle getGraphicsPipeline_(SK::Renderer::RenderCon
 	pipelineKey.depthWrite = desc.depthWrite;
 	pipelineKey.depthCompare = toVkCompareOp(desc.depthCompare);
 	pipelineKey.blending = desc.blending;
-	pipelineKey.colorFormat = vkRendererBackend->drawImage.imageFormat;
-	pipelineKey.depthFormat = vkRendererBackend->depthImage.imageFormat;
+	pipelineKey.colorFormat = vkRendererBackend->drawImageFormat;
+	pipelineKey.depthFormat = vkRendererBackend->depthImageFormat;
 	// Fill the shader resource mappings
 	pipelineKey.shaderResourceMappings.resize(desc.shaderResourceMappings.size());
 	for (size_t i = 0; i < desc.shaderResourceMappings.size(); ++i)
@@ -320,12 +320,12 @@ static uint32_t getFrameNumber_(SK::Renderer::RenderContext* renderContext)
 	return vkRendererBackend->frameNumber;
 }
 
-static uint32_t getFrameIndex_(SK::Renderer::RenderContext* renderContext)
+static uint8_t getFrameIndex_(SK::Renderer::RenderContext* renderContext)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 
-	return vkRendererBackend->frameNumber % SK::VkRendererBackend::FRAME_OVERLAP;
+	return vkRendererBackend->currentFrameIndex;
 }
 
 static bool beginFrame_(SK::Renderer::RenderContext* renderContext)
@@ -380,15 +380,16 @@ static void beginMainRendering_(SK::Renderer::RenderContext* renderContext)
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 
 	VkCommandBuffer cmd = vkRendererBackend->currentCmdBuffer;
+	uint8_t currentFrameIndex = vkRendererBackend->currentFrameIndex;
 
 	VkRenderingAttachmentInfo colorAttachment = SK::VkInit::attachment_info(
-		vkRendererBackend->drawImage.imageView,
+		vkRendererBackend->drawImages[currentFrameIndex].imageView,
 		&vkRendererBackend->colorAttachmentClearValue,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	);
 
 	VkRenderingAttachmentInfo depthAttachment = SK::VkInit::depth_attachment_info(
-		vkRendererBackend->depthImage.imageView,
+		vkRendererBackend->depthImages[currentFrameIndex].imageView,
 		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
 	);
 
@@ -988,6 +989,53 @@ static void executeFrameGraphBarriers_(SK::Renderer::RenderContext *renderContex
 	vkCmdPipelineBarrier2(cmd, &dep);
 }
 
+static void registerBackendInternalImages_(SK::VkRendererBackend::VkRenderContext* vkRenderContext)
+{
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	auto registerExternalTexture = [&](const SK::Renderer::TextureDesc& desc, VkImage image, VkImageView imageView) {
+		SK::VkRendererBackend::TextureRecord record{};
+		record.image.image = image;
+		record.image.imageView = imageView;
+		record.image.allocation = VK_NULL_HANDLE; // not allocated by the vkRenderContext
+		record.image.imageFormat = toVkFormat(desc.format);
+		record.image.imageExtent = toVkExtent3D(desc.imageExtent);
+		record.debugName = desc.debugName;
+		record.desc = desc;
+
+		const uint32_t index = static_cast<uint32_t>(vkRenderContext->textures.size());
+		vkRenderContext->textures.push_back(record);
+		return SK::Renderer::TextureHandle{ index };
+	};
+
+	/*
+		Create descriptions and records for the swapchain and main draw/depth images. Some of the description fields and the image/imageView handles will be updated every frame.
+
+		Initial handles are placeholders.
+	*/
+	SK::Renderer::TextureDesc swapchainDesc{};
+	swapchainDesc.imageExtent = { vkRendererBackend->drawExtent.width, vkRendererBackend->drawExtent.height, 1 };
+	swapchainDesc.format = SK::Renderer::Format::BGRA8Unorm;
+	swapchainDesc.usage = SK::Renderer::TextureUsage::ColorAttachment | SK::Renderer::TextureUsage::TransferDst;
+	swapchainDesc.debugName = "Swapchain";
+	vkRenderContext->swapchainImageHandle = registerExternalTexture(swapchainDesc, vkRendererBackend->swapchainImages[0], vkRendererBackend->swapchainImageViews[0]);
+
+	SK::Renderer::TextureDesc drawImageDesc{};
+	swapchainDesc.imageExtent = { vkRendererBackend->drawExtent.width, vkRendererBackend->drawExtent.height, 1 };
+	swapchainDesc.format = SK::Renderer::Format::RGBA16Float; 
+	swapchainDesc.usage = SK::Renderer::TextureUsage::ColorAttachment | SK::Renderer::TextureUsage::Storage
+						| SK::Renderer::TextureUsage::TransferSrc | SK::Renderer::TextureUsage::TransferDst;
+	swapchainDesc.debugName = "DrawImage";
+	vkRenderContext->mainDrawImageHandle = registerExternalTexture(drawImageDesc, vkRendererBackend->drawImages[0].image, vkRendererBackend->drawImages[0].imageView);
+
+	SK::Renderer::TextureDesc depthImageDesc{};
+	swapchainDesc.imageExtent = { vkRendererBackend->drawExtent.width, vkRendererBackend->drawExtent.height, 1 };
+	swapchainDesc.format = SK::Renderer::Format::Depth32Float;
+	swapchainDesc.usage = SK::Renderer::TextureUsage::DepthStencilAttachment;
+	swapchainDesc.debugName = "DepthImage";
+	vkRenderContext->mainDepthImageHandle = registerExternalTexture(depthImageDesc, vkRendererBackend->depthImages[0].image, vkRendererBackend->depthImages[0].imageView);
+}
+
 void SK::VkRendererBackend::initVkRenderContext(VkRenderContext* vkRenderContext, State* vkRendererBackend, VkSceneResources* vkSceneResources)
 {
 	vkRenderContext->vkRendererBackend = vkRendererBackend;
@@ -1021,7 +1069,8 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.getVertexBufferDeviceAddress = getVertexBufferDeviceAddress_,
 		.getBufferDeviceAddress = getBufferDeviceAddress_,
 		.createBuffer = createBuffer_,
-		.createTexture = createTexture_
+		.createTexture = createTexture_,
+		.executeFrameGraphBarriers = executeFrameGraphBarriers_
 	};
 
 	SK::Renderer::RenderContext renderContext{};

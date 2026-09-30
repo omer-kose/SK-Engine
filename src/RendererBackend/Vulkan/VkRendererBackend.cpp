@@ -120,7 +120,7 @@ void SK::VkRendererBackend::shutdown(State* vkRendererBackend)
 {
     if(vkRendererBackend->isInitialized) 
     {
-        for(int i = 0; i < FRAME_OVERLAP; ++i)
+        for(int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
         {
             // Destroy sync objects
             vkDestroyFence(vkRendererBackend->device, vkRendererBackend->frames[i].renderFence, nullptr);
@@ -202,14 +202,15 @@ bool SK::VkRendererBackend::beginFrame(State* vkRendererBackend)
     // Start the command buffer recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    // Transition depth image to optimal depth layout
-    SK::VkUtil::transitionImage(cmd, vkRendererBackend->depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    // Transition draw image to optimal rendering layout
-    SK::VkUtil::transitionImage(cmd, vkRendererBackend->drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
     // Frame has begun successfully, fill in per-frame transient state in the renderer backend state
     vkRendererBackend->currentCmdBuffer = currentFrame.mainCommandBuffer;
     vkRendererBackend->currentSwapchainImageIndex = swapchainImageIndex;
+    vkRendererBackend->currentFrameIndex = vkRendererBackend->frameNumber % NUM_FRAMES_IN_FLIGHT;
+
+    // Transition depth image to optimal depth layout
+    SK::VkUtil::transitionImage(cmd, vkRendererBackend->depthImages[vkRendererBackend->currentFrameIndex].image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    // Transition draw image to optimal rendering layout
+    SK::VkUtil::transitionImage(cmd, vkRendererBackend->drawImages[vkRendererBackend->currentFrameIndex].image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     // Bind the descriptor heaps once per-frame.
     SK::VkRendererBackend::bindDescriptorHeap(vkRendererBackend, cmd, &vkRendererBackend->descriptorHeap);
@@ -536,7 +537,7 @@ void SK::VkRendererBackend::updateSceneBuffer(State* vkRendererBackend, const SK
 {
     // Update the scene buffer
     SK::Renderer::GPUSceneData* pGpuSceneDataBuffer = (SK::Renderer::GPUSceneData*)vkRendererBackend->gpuSceneDataBuffer.allocation->GetMappedData();
-    pGpuSceneDataBuffer[vkRendererBackend->frameNumber % FRAME_OVERLAP] = sceneData;
+    pGpuSceneDataBuffer[vkRendererBackend->frameNumber % NUM_FRAMES_IN_FLIGHT] = sceneData;
 }
 
 void SK::VkRendererBackend::setViewport(State* vkRendererBackend, VkCommandBuffer cmd)
@@ -571,25 +572,31 @@ void SK::VkRendererBackend::createDrawAndDepthImages(State* vkRendererBackend)
     };
 
     vkRendererBackend->drawExtent = VkExtent2D{ vkRendererBackend->windowExtent.width, vkRendererBackend->windowExtent.height };
-    // Initialize the draw image
-    vkRendererBackend->drawImage = createImage(vkRendererBackend, drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-    // Initialize the depth image
-    vkRendererBackend->depthImage = createImage(vkRendererBackend, drawImageExtent, VK_FORMAT_D32_SFLOAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    vkRendererBackend->drawImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    vkRendererBackend->depthImageFormat = VK_FORMAT_D32_SFLOAT;
+
+    for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+    {
+        vkRendererBackend->drawImages[i] = createImage(vkRendererBackend, drawImageExtent, vkRendererBackend->drawImageFormat, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+        vkRendererBackend->depthImages[i] = createImage(vkRendererBackend, drawImageExtent, vkRendererBackend->depthImageFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    }
 }
 
 void SK::VkRendererBackend::destroyDrawAndDepthImages(State* vkRendererBackend)
 {
-    // Destroy the Draw Image
-    vmaDestroyImage(vkRendererBackend->vmaAllocator, vkRendererBackend->drawImage.image, vkRendererBackend->drawImage.allocation);
-    vkDestroyImageView(vkRendererBackend->device, vkRendererBackend->drawImage.imageView, nullptr);
-    // Destroy the Depth Image
-    vmaDestroyImage(vkRendererBackend->vmaAllocator, vkRendererBackend->depthImage.image, vkRendererBackend->depthImage.allocation);
-    vkDestroyImageView(vkRendererBackend->device, vkRendererBackend->depthImage.imageView, nullptr);
+    for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+    {
+        vmaDestroyImage(vkRendererBackend->vmaAllocator, vkRendererBackend->drawImages[i].image, vkRendererBackend->drawImages[i].allocation);
+        vkDestroyImageView(vkRendererBackend->device, vkRendererBackend->drawImages[i].imageView, nullptr);
+
+        vmaDestroyImage(vkRendererBackend->vmaAllocator, vkRendererBackend->depthImages[i].image, vkRendererBackend->depthImages[i].allocation);
+        vkDestroyImageView(vkRendererBackend->device, vkRendererBackend->depthImages[i].imageView, nullptr);
+    }
 }
 
 SK::VkRendererBackend::FrameData& SK::VkRendererBackend::getCurrentFrameData(State* vkRendererBackend)
 {
-    return vkRendererBackend->frames[vkRendererBackend->frameNumber % FRAME_OVERLAP];
+    return vkRendererBackend->frames[vkRendererBackend->frameNumber % NUM_FRAMES_IN_FLIGHT];
 }
 
 SK::VkRendererBackend::Shader SK::VkRendererBackend::getOrLoadShader(State* vkRendererBackend, const char* path, VkShaderStageFlagBits stage)
@@ -794,7 +801,7 @@ void SK::VkRendererBackend::initCommands(State* vkRendererBackend)
     // Create the command pool and allow for resetting of individual command buffers
     VkCommandPoolCreateInfo commandPoolInfo = SK::VkInit::command_pool_create_info(vkRendererBackend->graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    for(int i = 0; i < FRAME_OVERLAP; ++i)
+    for(int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         VK_CHECK(vkCreateCommandPool(vkRendererBackend->device, &commandPoolInfo, nullptr, &vkRendererBackend->frames[i].commandPool));
         // Allocate the default command buffer that will be used for rendering
@@ -825,7 +832,7 @@ void SK::VkRendererBackend::initSyncStructures(State* vkRendererBackend)
     VkFenceCreateInfo fenceCreateInfo = SK::VkInit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
     VkSemaphoreCreateInfo semaphoreCreateInfo = SK::VkInit::semaphore_create_info();
 
-    for(int i = 0; i < FRAME_OVERLAP; ++i)
+    for(int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         VK_CHECK(vkCreateFence(vkRendererBackend->device, &fenceCreateInfo, nullptr, &vkRendererBackend->frames[i].renderFence));
 
@@ -949,7 +956,7 @@ void SK::VkRendererBackend::initDefaultData(State* vkRendererBackend)
 
 void SK::VkRendererBackend::initGlobalSceneBuffer(State* vkRendererBackend)
 {
-    size_t bufferSize = FRAME_OVERLAP * sizeof(SK::Renderer::GPUSceneData);
+    size_t bufferSize = NUM_FRAMES_IN_FLIGHT * sizeof(SK::Renderer::GPUSceneData);
     // Allocate a new uniform buffer for scene data (allocating on VRAM that CPU can write to directly. It is limited but it is perfect for allocating reasonable amounts that are dynamic)
     vkRendererBackend->gpuSceneDataBuffer = createBuffer(vkRendererBackend, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     vkRendererBackend->mainDeletionQueue.pushFunction([=]() {

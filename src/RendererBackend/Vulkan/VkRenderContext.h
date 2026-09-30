@@ -22,17 +22,17 @@ namespace SK::VkRendererBackend
 
 	struct BufferRecord
 	{
+		SK::Renderer::BufferDesc desc{}; // cached
 		AllocatedBuffer buffer;
 		const char* debugName = nullptr;
-		SK::Renderer::BufferDesc desc{}; // cached
 	};
 
 	struct TextureRecord
 	{
+		SK::Renderer::TextureDesc desc{}; // cached
 		AllocatedImage image;
 		uint8_t samplerIndex; // descriptor index of the sampler
 		const char* debugName = nullptr;
-		SK::Renderer::TextureDesc desc{}; // cached
 	};
 
 	/*
@@ -50,6 +50,18 @@ namespace SK::VkRendererBackend
 
 		std::vector<BufferRecord> buffers;
 		std::vector<TextureRecord> textures;
+
+		/*
+			Backend owned images that are handled internally by the backend. VkRenderContext will also create a record and store handles for them and expose them via RenderContext but won't allocate or destroy them.
+			Those backend owned images are created implicitly during initVkRenderContext, so their handles should be stored explicitly to be able to reach them inside the records.
+
+			Even though there are multiple swapchain images and draw/depth images per frame-in-flight, having one single handle is sufficient provided that the required information kept updated.
+			Just after every frame begin, the information related to current swapchain, draw/depth images will be updated always. All the images are identical to each other, so a single description shared by them all
+			is sufficient.
+		*/
+		SK::Renderer::TextureHandle swapchainImageHandle;
+		SK::Renderer::TextureHandle mainDrawImageHandle;
+		SK::Renderer::TextureHandle mainDepthImageHandle;
 	};
 
 	void initVkRenderContext(VkRenderContext* vkRenderContext, State* vkRendererBackend, VkSceneResources* vkSceneResources);

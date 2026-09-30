@@ -91,16 +91,18 @@ void SK::UI::endFrame()
     ImGui::Render();
 }
 
+// TODO: This will be refactored after frame graph is in. UI still works directly with Vulkan backend does a copy that is not its job. 
 void SK::UI::draw(SK::VkRendererBackend::State* vkRendererBackend)
 {
     VkCommandBuffer cmd = vkRendererBackend->currentCmdBuffer;
     uint32_t swapchainImageIndex = vkRendererBackend->currentSwapchainImageIndex;
+    uint8_t frameIndex = vkRendererBackend->currentFrameIndex;
 
-    SK::VkUtil::transitionImage(cmd, vkRendererBackend->drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    SK::VkUtil::transitionImage(cmd, vkRendererBackend->drawImages[frameIndex].image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     SK::VkUtil::transitionImage(cmd, vkRendererBackend->swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     // Execute a copy operation from the draw image into the swapchain image
-    SK::VkUtil::copyImageToImage(cmd, vkRendererBackend->drawImage.image, vkRendererBackend->swapchainImages[swapchainImageIndex], vkRendererBackend->drawExtent, vkRendererBackend->swapchainExtent);
+    SK::VkUtil::copyImageToImage(cmd, vkRendererBackend->drawImages[frameIndex].image, vkRendererBackend->swapchainImages[swapchainImageIndex], vkRendererBackend->drawExtent, vkRendererBackend->swapchainExtent);
 
     // After drawing, we need to draw overlays on top of the swapchain image, so transition the swapchain image into optimal drawing layout
     SK::VkUtil::transitionImage(cmd, vkRendererBackend->swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);

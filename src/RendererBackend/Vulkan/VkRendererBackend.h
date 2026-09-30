@@ -44,7 +44,7 @@ namespace SK::VkRendererBackend
 		float geometryDrawRecordTime;
 	};
 
-	constexpr unsigned int FRAME_OVERLAP = 2;
+	constexpr unsigned int NUM_FRAMES_IN_FLIGHT = 2u;
 
 	struct Shader
 	{
@@ -109,7 +109,7 @@ namespace SK::VkRendererBackend
 		VmaAllocator vmaAllocator;
 
 		// Frame Data
-		FrameData frames[FRAME_OVERLAP];
+		FrameData frames[NUM_FRAMES_IN_FLIGHT];
 
 		// Global Resource Deletion Queue
 		SK::Util::DeletionQueue mainDeletionQueue;
@@ -126,15 +126,17 @@ namespace SK::VkRendererBackend
 		VkClearValue colorAttachmentClearValue = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 		// Draw Image
-		AllocatedImage drawImage;
-		AllocatedImage depthImage;
+		AllocatedImage drawImages[NUM_FRAMES_IN_FLIGHT];
+		VkFormat drawImageFormat;
+		AllocatedImage depthImages[NUM_FRAMES_IN_FLIGHT];
+		VkFormat depthImageFormat;
 		VkExtent2D drawExtent;
 
 		// Descriptor Heap
 		DescriptorHeap descriptorHeap;
 
 		// Per-frame Global Scene (uniform) Buffer (Shared by the whole engine which uses scene data so it is persistent per-frame no need to reallocate) 
-		AllocatedBuffer gpuSceneDataBuffer; // scene buffer is an array of scene data structs (FRAME_OVERLAP elements)
+		AllocatedBuffer gpuSceneDataBuffer; // scene buffer is an array of scene data structs (NUM_FRAMES_IN_FLIGHT elements)
 		ResourceDescriptorHandle gpuSceneDataDescriptor;
 
 		// Default textures
@@ -155,6 +157,7 @@ namespace SK::VkRendererBackend
 		// Per-Frame Transient State (Filled by beginFrame function)
 		uint32_t currentSwapchainImageIndex;
 		VkCommandBuffer currentCmdBuffer;
+		uint8_t currentFrameIndex;
 	};
 
 

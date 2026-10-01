@@ -38,6 +38,15 @@ uint8_t SK::Renderer::getFrameIndex(RenderContext* renderContext)
 	return renderContext->api->getFrameIndex(renderContext);
 }
 
+void SK::Renderer::handleWindowResize(RenderContext* renderContext)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->handleWindowResize != nullptr);
+
+	return renderContext->api->handleWindowResize(renderContext);
+}
+
 bool SK::Renderer::beginFrame(RenderContext* renderContext)
 {
 	assert(renderContext != nullptr);
@@ -99,6 +108,33 @@ SK::Renderer::TextureHandle SK::Renderer::createTexture(RenderContext* renderCon
 	assert(renderContext->api->createTexture != nullptr);
 
 	return renderContext->api->createTexture(renderContext, desc);
+}
+
+const SK::Renderer::BufferDesc& SK::Renderer::getBufferDesc(RenderContext* renderContext, const BufferHandle& handle)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->getBufferDesc != nullptr);
+
+	return renderContext->api->getBufferDesc(renderContext, handle);
+}
+
+const SK::Renderer::TextureDesc& SK::Renderer::getTextureDesc(RenderContext* renderContext, const TextureHandle& handle)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->getTextureDesc != nullptr);
+
+	return renderContext->api->getTextureDesc(renderContext, handle);
+}
+
+void SK::Renderer::updateBackendInternalImages(RenderContext* renderContext)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->updateBackendInternalImages != nullptr);
+
+	return renderContext->api->updateBackendInternalImages(renderContext);
 }
 
 void SK::Renderer::executeFrameGraphBarriers(RenderContext* renderContext, const FrameGraph& fg, const std::vector<FrameGraphBarrier>& barriers)

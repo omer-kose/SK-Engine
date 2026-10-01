@@ -328,6 +328,14 @@ static uint8_t getFrameIndex_(SK::Renderer::RenderContext* renderContext)
 	return vkRendererBackend->currentFrameIndex;
 }
 
+static void handleWindowResize_(SK::Renderer::RenderContext* renderContext)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	SK::VkRendererBackend::handleWindowResize(vkRendererBackend);
+}
+
 static bool beginFrame_(SK::Renderer::RenderContext* renderContext)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
@@ -801,6 +809,45 @@ static SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderContext* r
 	return SK::Renderer::TextureHandle{ textureIndex };
 }
 
+static const SK::Renderer::BufferDesc& getBufferDesc_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::BufferHandle& handle)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+
+	return vkRenderContext->buffers[handle.id].desc;
+}
+
+static const SK::Renderer::TextureDesc& getTextureDesc_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::TextureHandle& handle)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+
+	return vkRenderContext->textures[handle.id].desc;
+}
+
+static void updateBackendInternalImages_(SK::Renderer::RenderContext* renderContext)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	const uint32_t frameIndex = vkRendererBackend->currentFrameIndex;
+	const uint32_t swapchainIndex = vkRendererBackend->currentSwapchainImageIndex;
+
+	auto update = [](SK::VkRendererBackend::TextureRecord& rec, VkImage image, VkImageView imageView, VkExtent3D extent) {
+		// Redirect the image/imageView handles and update the extent. Other content is fixed for the lifetime of these resources no need to touch them.
+		rec.image.image = image;
+		rec.image.imageView = imageView;
+		rec.image.imageExtent = extent;
+	};
+
+	SK::VkRendererBackend::TextureRecord& swapchainImage = vkRenderContext->textures[vkRenderContext->swapchainImageHandle.id];
+	update(swapchainImage, vkRendererBackend->swapchainImages[swapchainIndex], vkRendererBackend->swapchainImageViews[swapchainIndex], { vkRendererBackend->swapchainExtent.width, vkRendererBackend->swapchainExtent.height, 1 });
+
+	SK::VkRendererBackend::TextureRecord& drawImage = vkRenderContext->textures[vkRenderContext->mainDrawImageHandle.id];
+	update(drawImage, vkRendererBackend->drawImages[frameIndex].image, vkRendererBackend->drawImages[frameIndex].imageView, vkRendererBackend->drawImages[frameIndex].imageExtent);
+
+	SK::VkRendererBackend::TextureRecord& depthImage = vkRenderContext->textures[vkRenderContext->mainDepthImageHandle.id];
+	update(depthImage, vkRendererBackend->depthImages[frameIndex].image, vkRendererBackend->depthImages[frameIndex].imageView, vkRendererBackend->depthImages[frameIndex].imageExtent);
+}
+
 struct StateSync
 {
 	VkPipelineStageFlags2 stage = VK_PIPELINE_STAGE_2_NONE;
@@ -1056,6 +1103,7 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.getComputePipeline = getComputePipeline_,
 		.getFrameNumber = getFrameNumber_,
 		.getFrameIndex = getFrameIndex_,
+		.handleWindowResize = handleWindowResize_,
 		.beginFrame = beginFrame_,
 		.endFrame = endFrame_,
 		.updateSceneBuffer = updateSceneBuffer_,
@@ -1072,6 +1120,9 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.getBufferDeviceAddress = getBufferDeviceAddress_,
 		.createBuffer = createBuffer_,
 		.createTexture = createTexture_,
+		.getBufferDesc = getBufferDesc_,
+		.getTextureDesc = getTextureDesc_,
+		.updateBackendInternalImages = updateBackendInternalImages_,
 		.executeFrameGraphBarriers = executeFrameGraphBarriers_
 	};
 

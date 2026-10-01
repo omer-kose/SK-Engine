@@ -383,6 +383,7 @@ namespace SK::Renderer
 
 		uint32_t (*getFrameNumber)(RenderContext* renderContext);
 		uint8_t (*getFrameIndex)(RenderContext* renderContext);
+		void (*handleWindowResize)(RenderContext* renderContext);
 
 		bool (*beginFrame)(RenderContext* renderContext);
 		void (*endFrame)(RenderContext* renderContext);
@@ -408,6 +409,10 @@ namespace SK::Renderer
 
 		BufferHandle (*createBuffer)(RenderContext* renderContext, const BufferDesc& desc);
 		TextureHandle(*createTexture)(RenderContext* renderContext, const TextureDesc& desc);
+		const BufferDesc& (*getBufferDesc)(RenderContext* renderContext, const BufferHandle& handle);
+		const TextureDesc& (*getTextureDesc)(RenderContext* renderContext, const TextureHandle& handle);
+
+		void (*updateBackendInternalImages)(RenderContext* renderContext);
 
 		void (*executeFrameGraphBarriers)(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);
 	};
@@ -426,6 +431,7 @@ namespace SK::Renderer
 
 	uint32_t getFrameNumber(RenderContext* renderContext);
 	uint8_t getFrameIndex(RenderContext* renderContext);
+	void handleWindowResize(RenderContext* renderContext);
 
 	bool beginFrame(RenderContext* renderContext);
 	void endFrame(RenderContext* renderContext);
@@ -451,6 +457,10 @@ namespace SK::Renderer
 
 	BufferHandle createBuffer(RenderContext* renderContext, const BufferDesc& desc);
 	TextureHandle createTexture(RenderContext* renderContext, const TextureDesc& desc);
+	const BufferDesc& getBufferDesc (RenderContext* renderContext, const BufferHandle& handle);
+	const TextureDesc& getTextureDesc (RenderContext* renderContext, const TextureHandle& handle);
+
+	void updateBackendInternalImages(RenderContext* renderContext);
 
 	void executeFrameGraphBarriers(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);
 }

@@ -202,18 +202,13 @@ bool SK::VkRendererBackend::beginFrame(State* vkRendererBackend)
     // Start the command buffer recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+    // Bind the descriptor heaps once per-frame.
+    SK::VkRendererBackend::bindDescriptorHeap(vkRendererBackend, cmd, &vkRendererBackend->descriptorHeap);
+
     // Frame has begun successfully, fill in per-frame transient state in the renderer backend state
     vkRendererBackend->currentCmdBuffer = currentFrame.mainCommandBuffer;
     vkRendererBackend->currentSwapchainImageIndex = swapchainImageIndex;
     vkRendererBackend->currentFrameIndex = vkRendererBackend->frameNumber % NUM_FRAMES_IN_FLIGHT;
-
-    // Transition depth image to optimal depth layout
-    SK::VkUtil::transitionImage(cmd, vkRendererBackend->depthImages[vkRendererBackend->currentFrameIndex].image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    // Transition draw image to optimal rendering layout
-    SK::VkUtil::transitionImage(cmd, vkRendererBackend->drawImages[vkRendererBackend->currentFrameIndex].image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-    // Bind the descriptor heaps once per-frame.
-    SK::VkRendererBackend::bindDescriptorHeap(vkRendererBackend, cmd, &vkRendererBackend->descriptorHeap);
 
     return true;
 }
@@ -224,9 +219,6 @@ void SK::VkRendererBackend::endFrame(State* vkRendererBackend)
 
     VkCommandBuffer cmd = vkRendererBackend->currentCmdBuffer;
     uint32_t swapchainImageIndex = vkRendererBackend->currentSwapchainImageIndex;
-
-    // Transition swapchain image into the presentation layout
-    SK::VkUtil::transitionImage(cmd, vkRendererBackend->swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     // Finalize the command buffer
     VK_CHECK(vkEndCommandBuffer(cmd));

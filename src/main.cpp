@@ -6,6 +6,7 @@
 #include <Scene/Scene.h>
 #include <Renderer/GlobalGPUTypes.h>
 #include <Renderer/RenderContext.h>
+#include <Renderer/FrameGraph.h>
 #include <Renderer/ForwardRenderer.h>
 
 #include "imgui.h"
@@ -70,6 +71,11 @@ int main(int argc, char* argv[])
     SK::ForwardRenderer::Resources forwardRendererResources;
     SK::ForwardRenderer::createResources(&renderContext, &forwardRendererResources);
 
+    // Until I have a rendering orchestrator, these will be here.
+    const SK::Renderer::TextureHandle swapchainImageHandle = SK::Renderer::getSwapchainImageHandle(&renderContext);
+    const SK::Renderer::TextureHandle mainDrawImageHandle = SK::Renderer::getMainDrawImageHandle(&renderContext);
+    const SK::Renderer::TextureHandle mainDepthImageHandle = SK::Renderer::getMainDepthImageHandle(&renderContext);
+
     // main loop
     while(!application.shouldQuit)
     {
@@ -115,11 +121,73 @@ int main(int argc, char* argv[])
             SK::Renderer::updateBackendInternalImageInfos(&renderContext);
             SK::Renderer::updateSceneBuffer(&renderContext, scene.gpuSceneData);
 
-            SK::ForwardRenderer::Input forwardInput{};
-            forwardInput.drawContext = &scene.drawContext;
-            SK::ForwardRenderer::draw(&renderContext, forwardRendererResources, forwardInput);
+            SK::Renderer::FrameGraph frameGraph;
+            frameGraph.init(SK::Renderer::getFrameIndex(&renderContext));
 
-            SK::UI::draw(&vkRendererBackend);
+            SK::Renderer::FrameGraphResourceHandle fgSwapchainResourceHandle = frameGraph.importTexture(
+                swapchainImageHandle,
+                SK::Renderer::getTextureDesc(&renderContext, swapchainImageHandle),
+                SK::Renderer::FrameGraphResourceState::Undefined,
+                SK::Renderer::FrameGraphResourceState::Present,
+                "Swapchain Image"
+            );
+
+            SK::Renderer::FrameGraphResourceHandle fgMainDrawImageResourceHandle = frameGraph.importTexture(
+                mainDrawImageHandle,
+                SK::Renderer::getTextureDesc(&renderContext, mainDrawImageHandle),
+                SK::Renderer::FrameGraphResourceState::Undefined,
+                std::nullopt,
+                "Main Draw Image"
+            );
+
+            SK::Renderer::FrameGraphResourceHandle fgMainDepthImageResourceHandle = frameGraph.importTexture(
+                mainDepthImageHandle,
+                SK::Renderer::getTextureDesc(&renderContext, mainDepthImageHandle),
+                SK::Renderer::FrameGraphResourceState::Undefined,
+                std::nullopt,
+                "Main Depth Image"
+            );
+
+            frameGraph.addPass("Forward Rendering",
+                [&](SK::Renderer::FrameGraphPassBuilder& builder) {
+                    builder.writeTexture(fgMainDrawImageResourceHandle, SK::Renderer::FrameGraphResourceState::ColorAttachment, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));
+                    builder.writeTexture(fgMainDepthImageResourceHandle, SK::Renderer::FrameGraphResourceState::DepthStencilAttachment, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));
+                },
+                [&](const SK::Renderer::FrameGraphPassContext& context) {
+                    SK::ForwardRenderer::Input forwardInput{};
+                    forwardInput.drawContext = &scene.drawContext;
+                    SK::ForwardRenderer::draw(context.renderContext, forwardRendererResources, forwardInput);
+                }
+            );
+
+            frameGraph.addPass("Copy Draw to Swapchain",
+                [&](SK::Renderer::FrameGraphPassBuilder& builder) {
+                    builder.readTexture(fgMainDrawImageResourceHandle, SK::Renderer::FrameGraphResourceState::TransferRead, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));
+                    builder.writeTexture(fgSwapchainResourceHandle, SK::Renderer::FrameGraphResourceState::TransferWrite, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));
+                },
+                [&](const SK::Renderer::FrameGraphPassContext& context) {
+                    const SK::Renderer::TextureHandle& drawImage = context.getTexture(fgMainDrawImageResourceHandle);
+                    const SK::Renderer::TextureHandle& swapchainImage = context.getTexture(fgSwapchainResourceHandle);
+
+                    SK::Renderer::blitImage(&renderContext, drawImage, swapchainImage);
+                }
+            );
+
+            frameGraph.addPass("UI Pass",
+                [&](SK::Renderer::FrameGraphPassBuilder& builder) {
+                    builder.readTexture(fgSwapchainResourceHandle, SK::Renderer::FrameGraphResourceState::ColorAttachment, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));
+                    builder.setSideEffect();
+                },
+                [&](const SK::Renderer::FrameGraphPassContext& context) {
+                    SK::UI::draw(&vkRendererBackend);
+                }
+            );
+
+            if (frameGraph.compile(&renderContext))
+            {
+                frameGraph.execute(&renderContext);
+            }
+
             SK::Renderer::endFrame(&renderContext);
         }
 

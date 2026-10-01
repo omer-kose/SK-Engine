@@ -34,7 +34,7 @@ void SK::VkUtil::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayo
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-void SK::VkUtil::copyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D destSize)
+void SK::VkUtil::blitImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D destSize)
 {
 	VkImageBlit2 blitRegion = {.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
 

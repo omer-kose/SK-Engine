@@ -5,6 +5,7 @@
 
 #include <RendererBackend/Vulkan/VkAssetRegistry.h>
 #include <RendererBackend/Vulkan/VkInitializers.h>
+#include <RendererBackend/Vulkan/VkImages.h>
 #include <RendererBackend/Vulkan/VkMaterialRegistry.h>
 #include <RendererBackend/Vulkan/VkPipelines.h>
 #include <RendererBackend/Vulkan/VkRendererBackend.h>
@@ -40,17 +41,17 @@ static VkShaderStageFlags toVkShaderStageFlags(SK::Renderer::ShaderStageFlags st
 {
 	VkShaderStageFlags vkStages = 0;
 
-	if ((stages & static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::VertexShader)) != 0)
+	if ((stages & SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::VertexShader)) != 0)
 	{
 		vkStages |= VK_SHADER_STAGE_VERTEX_BIT;
 	}
 
-	if ((stages & static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::FragmentShader)) != 0)
+	if ((stages & SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::FragmentShader)) != 0)
 	{
 		vkStages |= VK_SHADER_STAGE_FRAGMENT_BIT;
 	}
 
-	if ((stages & static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::ComputeShader)) != 0)
+	if ((stages & SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::ComputeShader)) != 0)
 	{
 		vkStages |= VK_SHADER_STAGE_COMPUTE_BIT;
 	}
@@ -328,6 +329,11 @@ static uint8_t getFrameIndex_(SK::Renderer::RenderContext* renderContext)
 	return vkRendererBackend->currentFrameIndex;
 }
 
+static uint8_t getNumFramesInFlight_(SK::Renderer::RenderContext* renderContext)
+{
+	return SK::VkRendererBackend::NUM_FRAMES_IN_FLIGHT;
+}
+
 static void handleWindowResize_(SK::Renderer::RenderContext* renderContext)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
@@ -335,6 +341,21 @@ static void handleWindowResize_(SK::Renderer::RenderContext* renderContext)
 
 	SK::VkRendererBackend::handleWindowResize(vkRendererBackend);
 }
+
+static void blitImage_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::TextureHandle& src, const SK::Renderer::TextureHandle& dst)
+{
+	assert(src.isValid());
+	assert(dst.isValid());
+
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	const AllocatedImage& srcImage = vkRenderContext->textures[src.id].image;
+	const AllocatedImage& dstImage = vkRenderContext->textures[dst.id].image;
+
+	SK::VkUtil::blitImage(vkRendererBackend->currentCmdBuffer, srcImage.image, dstImage.image, { srcImage.imageExtent.width, srcImage.imageExtent.height }, { dstImage.imageExtent.width, dstImage.imageExtent.height });
+}
+
 
 static bool beginFrame_(SK::Renderer::RenderContext* renderContext)
 {
@@ -378,6 +399,8 @@ static SK::Renderer::BufferDeviceAddress getVertexBufferDeviceAddress_(SK::Rende
 
 static SK::Renderer::BufferDeviceAddress getBufferDeviceAddress_(SK::Renderer::RenderContext* renderContext, SK::Renderer::BufferHandle bufferHandle)
 {
+	assert(bufferHandle.isValid());
+
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	return vkRenderContext->buffers[bufferHandle.id].buffer.address;
 }
@@ -716,7 +739,7 @@ static VkSamplerCreateInfo toVkSamplerCreateInfo(const SK::Renderer::SamplerDesc
 	return info;
 }
 
-static SK::Renderer::BufferHandle createBuffer_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::BufferDesc& desc)
+static const SK::Renderer::BufferHandle createBuffer_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::BufferDesc& desc)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
@@ -767,7 +790,7 @@ static uint32_t getOrCreateSampler(SK::Renderer::RenderContext* renderContext, c
 	return SK::VkRendererBackend::createSamplerDescriptor(vkRendererBackend, info).index;
 }
 
-static SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::TextureDesc& textureDesc)
+static const SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::TextureDesc& textureDesc)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
@@ -811,6 +834,7 @@ static SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderContext* r
 
 static const SK::Renderer::BufferDesc& getBufferDesc_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::BufferHandle& handle)
 {
+	assert(handle.isValid());
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 
 	return vkRenderContext->buffers[handle.id].desc;
@@ -818,9 +842,31 @@ static const SK::Renderer::BufferDesc& getBufferDesc_(SK::Renderer::RenderContex
 
 static const SK::Renderer::TextureDesc& getTextureDesc_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::TextureHandle& handle)
 {
+	assert(handle.isValid());
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 
 	return vkRenderContext->textures[handle.id].desc;
+}
+
+const SK::Renderer::TextureHandle getSwapchainImageHandle_(SK::Renderer::RenderContext* renderContext)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+
+	return vkRenderContext->swapchainImageHandle;
+}
+
+const SK::Renderer::TextureHandle getMainDrawImageHandle_(SK::Renderer::RenderContext* renderContext)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+
+	return vkRenderContext->mainDrawImageHandle;
+}
+
+const SK::Renderer::TextureHandle getMainDepthImageHandle_(SK::Renderer::RenderContext* renderContext)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+
+	return vkRenderContext->mainDepthImageHandle;
 }
 
 static void updateBackendInternalImageInfos_(SK::Renderer::RenderContext* renderContext)
@@ -1103,7 +1149,9 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.getComputePipeline = getComputePipeline_,
 		.getFrameNumber = getFrameNumber_,
 		.getFrameIndex = getFrameIndex_,
+		.getNumFramesInFlight = getNumFramesInFlight_,
 		.handleWindowResize = handleWindowResize_,
+		.blitImage = blitImage_,
 		.beginFrame = beginFrame_,
 		.endFrame = endFrame_,
 		.updateSceneBuffer = updateSceneBuffer_,
@@ -1122,6 +1170,9 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.createTexture = createTexture_,
 		.getBufferDesc = getBufferDesc_,
 		.getTextureDesc = getTextureDesc_,
+		.getSwapchainImageHandle = getSwapchainImageHandle_,
+		.getMainDrawImageHandle = getMainDrawImageHandle_,
+		.getMainDepthImageHandle = getMainDepthImageHandle_,
 		.updateBackendInternalImageInfos = updateBackendInternalImageInfos_,
 		.executeFrameGraphBarriers = executeFrameGraphBarriers_
 	};

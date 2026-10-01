@@ -24,11 +24,21 @@ namespace SK::Renderer
 	struct BufferHandle
 	{
 		uint32_t id;
+
+		bool isValid() const
+		{
+			return id != INVALID_HANDLE;
+		}
 	};
 
 	struct TextureHandle
 	{
 		uint32_t id;
+
+		bool isValid() const
+		{
+			return id != INVALID_HANDLE;
+		}
 	};
 
 	enum class ShaderStageFlagBits : uint32_t
@@ -40,25 +50,30 @@ namespace SK::Renderer
 	};
 	using ShaderStageFlags = uint32_t;
 
+	constexpr ShaderStageFlags toShaderStageFlags(ShaderStageFlagBits bits)
+	{
+		return static_cast<ShaderStageFlags>(bits);
+	}
+
 	constexpr ShaderStageFlags operator|(ShaderStageFlagBits lhs, ShaderStageFlagBits rhs)
 	{
-		return static_cast<ShaderStageFlags>(lhs) | static_cast<ShaderStageFlags>(rhs);
+		return toShaderStageFlags(lhs) | toShaderStageFlags(rhs);
 	}
 
 	constexpr ShaderStageFlags& operator|=(ShaderStageFlags& lhs, ShaderStageFlagBits rhs)
 	{
-		lhs |= static_cast<ShaderStageFlags>(rhs);
+		lhs |= toShaderStageFlags(rhs);
 		return lhs;
 	}
 
 	constexpr ShaderStageFlags operator&(ShaderStageFlagBits lhs, ShaderStageFlagBits rhs)
 	{
-		return static_cast<ShaderStageFlags>(lhs) & static_cast<ShaderStageFlags>(rhs);
+		return toShaderStageFlags(lhs) & toShaderStageFlags(rhs);
 	}
 
 	constexpr ShaderStageFlags& operator&=(ShaderStageFlags& lhs, ShaderStageFlagBits rhs)
 	{
-		lhs &= static_cast<ShaderStageFlags>(rhs);
+		lhs &= toShaderStageFlags(rhs);
 		return lhs;
 	}
 
@@ -383,7 +398,9 @@ namespace SK::Renderer
 
 		uint32_t (*getFrameNumber)(RenderContext* renderContext);
 		uint8_t (*getFrameIndex)(RenderContext* renderContext);
+		uint8_t (*getNumFramesInFlight)(RenderContext* renderContext);
 		void (*handleWindowResize)(RenderContext* renderContext);
+		void (*blitImage)(RenderContext* renderContext, const TextureHandle& src, const TextureHandle& dst);
 
 		bool (*beginFrame)(RenderContext* renderContext);
 		void (*endFrame)(RenderContext* renderContext);
@@ -407,11 +424,14 @@ namespace SK::Renderer
 		BufferDeviceAddress (*getVertexBufferDeviceAddress)(RenderContext* renderContext, size_t meshIndex);
 		BufferDeviceAddress(*getBufferDeviceAddress)(RenderContext* renderContext, BufferHandle bufferHandle);
 
-		BufferHandle (*createBuffer)(RenderContext* renderContext, const BufferDesc& desc);
-		TextureHandle(*createTexture)(RenderContext* renderContext, const TextureDesc& desc);
+		const BufferHandle (*createBuffer)(RenderContext* renderContext, const BufferDesc& desc);
+		const TextureHandle(*createTexture)(RenderContext* renderContext, const TextureDesc& desc);
 		const BufferDesc& (*getBufferDesc)(RenderContext* renderContext, const BufferHandle& handle);
 		const TextureDesc& (*getTextureDesc)(RenderContext* renderContext, const TextureHandle& handle);
 
+		const TextureHandle (*getSwapchainImageHandle)(RenderContext* renderContext);
+		const TextureHandle (*getMainDrawImageHandle)(RenderContext* renderContext);
+		const TextureHandle (*getMainDepthImageHandle)(RenderContext* renderContext);
 		void (*updateBackendInternalImageInfos)(RenderContext* renderContext);
 
 		void (*executeFrameGraphBarriers)(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);
@@ -431,7 +451,9 @@ namespace SK::Renderer
 
 	uint32_t getFrameNumber(RenderContext* renderContext);
 	uint8_t getFrameIndex(RenderContext* renderContext);
+	uint8_t getNumFramesInFlight(RenderContext* renderContext);
 	void handleWindowResize(RenderContext* renderContext);
+	void blitImage(RenderContext* renderContext, const TextureHandle& src, const TextureHandle& dst);
 
 	bool beginFrame(RenderContext* renderContext);
 	void endFrame(RenderContext* renderContext);
@@ -455,11 +477,14 @@ namespace SK::Renderer
 	BufferDeviceAddress getVertexBufferDeviceAddress(RenderContext* renderContext, size_t meshIndex);
 	BufferDeviceAddress getBufferDeviceAddress(RenderContext* renderContext, BufferHandle bufferHandle);
 
-	BufferHandle createBuffer(RenderContext* renderContext, const BufferDesc& desc);
-	TextureHandle createTexture(RenderContext* renderContext, const TextureDesc& desc);
+	const BufferHandle createBuffer(RenderContext* renderContext, const BufferDesc& desc);
+	const TextureHandle createTexture(RenderContext* renderContext, const TextureDesc& desc);
 	const BufferDesc& getBufferDesc (RenderContext* renderContext, const BufferHandle& handle);
 	const TextureDesc& getTextureDesc (RenderContext* renderContext, const TextureHandle& handle);
 
+	const TextureHandle getSwapchainImageHandle(RenderContext* renderContext);
+	const TextureHandle getMainDrawImageHandle(RenderContext* renderContext);
+	const TextureHandle getMainDepthImageHandle(RenderContext* renderContext);
 	void updateBackendInternalImageInfos(RenderContext* renderContext);
 
 	void executeFrameGraphBarriers(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);

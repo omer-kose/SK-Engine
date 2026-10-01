@@ -38,6 +38,15 @@ uint8_t SK::Renderer::getFrameIndex(RenderContext* renderContext)
 	return renderContext->api->getFrameIndex(renderContext);
 }
 
+uint8_t SK::Renderer::getNumFramesInFlight(RenderContext* renderContext)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->getNumFramesInFlight != nullptr);
+
+	return renderContext->api->getNumFramesInFlight(renderContext);
+}
+
 void SK::Renderer::handleWindowResize(RenderContext* renderContext)
 {
 	assert(renderContext != nullptr);
@@ -45,6 +54,15 @@ void SK::Renderer::handleWindowResize(RenderContext* renderContext)
 	assert(renderContext->api->handleWindowResize != nullptr);
 
 	return renderContext->api->handleWindowResize(renderContext);
+}
+
+void SK::Renderer::blitImage(RenderContext* renderContext, const TextureHandle& src, const TextureHandle& dst)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->blitImage != nullptr);
+
+	return renderContext->api->blitImage(renderContext, src, dst);
 }
 
 bool SK::Renderer::beginFrame(RenderContext* renderContext)
@@ -92,7 +110,7 @@ SK::Renderer::BufferDeviceAddress SK::Renderer::getBufferDeviceAddress(RenderCon
 	return renderContext->api->getBufferDeviceAddress(renderContext, bufferHandle);
 }
 
-SK::Renderer::BufferHandle SK::Renderer::createBuffer(RenderContext* renderContext, const BufferDesc& desc)
+const SK::Renderer::BufferHandle SK::Renderer::createBuffer(RenderContext* renderContext, const BufferDesc& desc)
 {
 	assert(renderContext != nullptr);
 	assert(renderContext->api != nullptr);
@@ -101,7 +119,7 @@ SK::Renderer::BufferHandle SK::Renderer::createBuffer(RenderContext* renderConte
 	return renderContext->api->createBuffer(renderContext, desc);
 }
 
-SK::Renderer::TextureHandle SK::Renderer::createTexture(RenderContext* renderContext, const TextureDesc& desc)
+const SK::Renderer::TextureHandle SK::Renderer::createTexture(RenderContext* renderContext, const TextureDesc& desc)
 {
 	assert(renderContext != nullptr);
 	assert(renderContext->api != nullptr);
@@ -126,6 +144,33 @@ const SK::Renderer::TextureDesc& SK::Renderer::getTextureDesc(RenderContext* ren
 	assert(renderContext->api->getTextureDesc != nullptr);
 
 	return renderContext->api->getTextureDesc(renderContext, handle);
+}
+
+const SK::Renderer::TextureHandle SK::Renderer::getSwapchainImageHandle(RenderContext* renderContext)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->getSwapchainImageHandle != nullptr);
+
+	return renderContext->api->getSwapchainImageHandle(renderContext);
+}
+
+const SK::Renderer::TextureHandle SK::Renderer::getMainDrawImageHandle(RenderContext* renderContext)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->getMainDrawImageHandle!= nullptr);
+
+	return renderContext->api->getMainDrawImageHandle(renderContext);
+}
+
+const SK::Renderer::TextureHandle SK::Renderer::getMainDepthImageHandle(RenderContext* renderContext)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->getMainDepthImageHandle != nullptr);
+
+	return renderContext->api->getMainDepthImageHandle(renderContext);
 }
 
 void SK::Renderer::updateBackendInternalImageInfos(RenderContext* renderContext)

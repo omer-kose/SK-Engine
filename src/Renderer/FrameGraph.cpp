@@ -195,8 +195,12 @@ static SK::Renderer::FrameGraphResourceHandle appendWriteUsage(
     return resource;
 }
 
+/*
+    Simple append with a guard in the debug mode.
+*/
 static void appendUniqueUse(std::vector<SK::Renderer::FrameGraphResourceUsage>& usages, const SK::Renderer::FrameGraphResourceUsage& usage)
 {
+#ifndef NDEBUG
     for (const SK::Renderer::FrameGraphResourceUsage& existing : usages)
     {
         assert(existing.resource.index != usage.resource.index &&
@@ -204,7 +208,7 @@ static void appendUniqueUse(std::vector<SK::Renderer::FrameGraphResourceUsage>& 
             "Use readWriteTexture/readWriteBuffer when one pass "
             "requires both read and write access.");
     }
-
+#endif
     usages.push_back(usage);
 }
 
@@ -364,7 +368,7 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importTexture(T
     entry.backendHandle = texture;
     entry.versions.push_back({});
     entry.currentState = initialState;
-    entry.currentShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None);
+    entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
     entry.finalState = finalState;
     entry.imported = true;
     entry.debugName = debugName;
@@ -389,7 +393,7 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importBuffer(Bu
     entry.backendHandle = buffer;
     entry.versions.push_back({});
     entry.currentState = initialState;
-    entry.currentShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None);
+    entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
     entry.finalState = finalState;
     entry.imported = true;
     entry.debugName = debugName;
@@ -407,7 +411,7 @@ bool SK::Renderer::FrameGraph::compile(RenderContext* renderContext)
     buildEdges();
 
     std::vector<SK::Renderer::FrameGraphPassIndex> sorted;
-    if (topologicalSort(sorted))
+    if (!topologicalSort(sorted))
     {
         /*
             Cycle detected. Phase 1 returns false; later diagnostics can
@@ -506,7 +510,7 @@ bool SK::Renderer::FrameGraph::topologicalSort(std::vector<FrameGraphPassIndex>&
 
     std::queue<SK::Renderer::FrameGraphPassIndex> ready;
 
-    for (SK::Renderer::FrameGraphPassIndex passIndex = 0; passes.size(); ++passIndex)
+    for (SK::Renderer::FrameGraphPassIndex passIndex = 0; passIndex < passes.size(); ++passIndex)
     {
         const uint32_t degree = passes[passIndex].inDegree;
         inDegrees.push_back(degree);
@@ -548,7 +552,7 @@ void SK::Renderer::FrameGraph::cull(const std::vector<FrameGraphPassIndex>& sort
     }
 
     // Propagate alive info from implicit roots backwards into the frame graph.
-    for (uint32_t sortedIndex = sorted.size() - 1; sortedIndex >= 0; --sortedIndex)
+    for (int32_t sortedIndex = sorted.size() - 1; sortedIndex >= 0; --sortedIndex)
     {
         const SK::Renderer::FrameGraphPassIndex passIndex = sorted[sortedIndex];
 
@@ -634,23 +638,23 @@ void SK::Renderer::FrameGraph::computeBarriers(const std::vector<FrameGraphPassI
         }
 
         std::vector<SK::Renderer::FrameGraphResourceUsage> usages;
-        usages.resize(pass.reads.size() + pass.writes.size() + pass.readWrites.size());
+        usages.reserve(pass.reads.size() + pass.writes.size() + pass.readWrites.size());
 
         for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.reads)
         {
-            assert(!validateUsage(usage, true, false));
+            assert(validateUsage(usage, true, false));
             appendUniqueUse(usages, usage);
         }
 
         for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.writes)
         {
-            assert(!validateUsage(usage, false, true));
+            assert(validateUsage(usage, false, true));
             appendUniqueUse(usages, usage);
         }
 
         for (const SK::Renderer::FrameGraphResourceUsage& usage : pass.readWrites)
         {
-            assert(!validateUsage(usage, true, true));
+            assert(validateUsage(usage, true, true));
             appendUniqueUse(usages, usage);
         }
 
@@ -697,10 +701,10 @@ void SK::Renderer::FrameGraph::computeBarriers(const std::vector<FrameGraphPassI
             .before = entry.currentState,
             .after = requiredState,
             .beforeShaderStages = entry.currentShaderStages,
-            .afterShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None)
+            .afterShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None)
         });
 
         entry.currentState = requiredState;
-        entry.currentShaderStages = static_cast<SK::Renderer::ShaderStageFlags>(SK::Renderer::ShaderStageFlagBits::None);
+        entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
     }
 }

@@ -128,13 +128,13 @@ const SK::Renderer::TextureDesc& SK::Renderer::getTextureDesc(RenderContext* ren
 	return renderContext->api->getTextureDesc(renderContext, handle);
 }
 
-void SK::Renderer::updateBackendInternalImages(RenderContext* renderContext)
+void SK::Renderer::updateBackendInternalImageInfos(RenderContext* renderContext)
 {
 	assert(renderContext != nullptr);
 	assert(renderContext->api != nullptr);
-	assert(renderContext->api->updateBackendInternalImages != nullptr);
+	assert(renderContext->api->updateBackendInternalImageInfos != nullptr);
 
-	return renderContext->api->updateBackendInternalImages(renderContext);
+	return renderContext->api->updateBackendInternalImageInfos(renderContext);
 }
 
 void SK::Renderer::executeFrameGraphBarriers(RenderContext* renderContext, const FrameGraph& fg, const std::vector<FrameGraphBarrier>& barriers)

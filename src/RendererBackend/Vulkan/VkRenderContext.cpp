@@ -823,7 +823,7 @@ static const SK::Renderer::TextureDesc& getTextureDesc_(SK::Renderer::RenderCont
 	return vkRenderContext->textures[handle.id].desc;
 }
 
-static void updateBackendInternalImages_(SK::Renderer::RenderContext* renderContext)
+static void updateBackendInternalImageInfos_(SK::Renderer::RenderContext* renderContext)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
@@ -1122,7 +1122,7 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.createTexture = createTexture_,
 		.getBufferDesc = getBufferDesc_,
 		.getTextureDesc = getTextureDesc_,
-		.updateBackendInternalImages = updateBackendInternalImages_,
+		.updateBackendInternalImageInfos = updateBackendInternalImageInfos_,
 		.executeFrameGraphBarriers = executeFrameGraphBarriers_
 	};
 

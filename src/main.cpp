@@ -112,6 +112,7 @@ int main(int argc, char* argv[])
 
         if(SK::Renderer::beginFrame(&renderContext))
         {
+            SK::Renderer::updateBackendInternalImageInfos(&renderContext);
             SK::Renderer::updateSceneBuffer(&renderContext, scene.gpuSceneData);
 
             SK::ForwardRenderer::Input forwardInput{};

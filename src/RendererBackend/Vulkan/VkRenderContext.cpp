@@ -1032,8 +1032,7 @@ static StateSync lowerState(
 		case State::Undefined:
 		default:
 			/*
-				Only reachable as a "before" state, and only for buffers
-				(see importBuffer). Conservative: flush everything so an
+				Only reachable as a "before" state. Conservative: flush everything so an
 				unknown prior writer is still synchronized against.
 			*/
 			return { VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED };

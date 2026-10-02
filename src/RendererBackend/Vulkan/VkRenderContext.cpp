@@ -181,6 +181,36 @@ static VkSpirvResourceTypeFlagsEXT toSpirvResourceTypeMask(SK::Renderer::ShaderR
 	return 0;
 }
 
+static VkClearColorValue toVkClearColorValue(const SK::Renderer::ClearColorValue& value)
+{
+	static_assert(sizeof(SK::Renderer::ClearColorValue) == sizeof(VkClearColorValue));
+	static_assert(alignof(SK::Renderer::ClearColorValue) == alignof(VkClearColorValue));
+
+	VkClearColorValue result;
+	std::memcpy(&result, &value, sizeof(result));
+	return result;
+}
+
+static VkClearDepthStencilValue toVkClearDepthStencilValue(const SK::Renderer::ClearDepthStencilValue& value)
+{
+	static_assert(sizeof(SK::Renderer::ClearDepthStencilValue) == sizeof(VkClearDepthStencilValue));
+	static_assert(alignof(SK::Renderer::ClearDepthStencilValue) == alignof(VkClearDepthStencilValue));
+
+	VkClearDepthStencilValue result;
+	std::memcpy(&result, &value, sizeof(result));
+	return result;
+}
+
+static VkClearValue toVkClearValue(const SK::Renderer::ClearValue& value)
+{
+	static_assert(sizeof(SK::Renderer::ClearValue) == sizeof(VkClearValue));
+	static_assert(alignof(SK::Renderer::ClearValue) == alignof(VkClearValue));
+
+	VkClearValue result;
+	std::memcpy(&result, &value, sizeof(result));
+	return result;
+}
+
 static void hashCombine(size_t* seed, size_t value)
 {
 	*seed ^= value + 0x9e3779b9 + (*seed << 6) + (*seed >> 2);
@@ -390,7 +420,7 @@ static SK::Renderer::BufferDeviceAddress getVertexBufferDeviceAddress_(SK::Rende
 	if (meshIndex >= sceneResources->vkAssetRegistry.meshes.size())
 	{
 		fmt::println("Tried to get the vertex buffer address of an invalid mesh: {}", meshIndex);
-		return static_cast<SK::Renderer::BufferDeviceAddress>(SK::Renderer::INVALID_HANDLE);
+		return static_cast<SK::Renderer::BufferDeviceAddress>(UINT64_MAX);
 	}
 
 	const SK::VkRendererBackend::VkAssetRegistry::GPUMesh& mesh = sceneResources->vkAssetRegistry.meshes[meshIndex];
@@ -405,29 +435,47 @@ static SK::Renderer::BufferDeviceAddress getBufferDeviceAddress_(SK::Renderer::R
 	return vkRenderContext->buffers[bufferHandle.id].buffer.address;
 }
 
-static void beginMainRendering_(SK::Renderer::RenderContext* renderContext)
+/*
+	Depth Image is optional.
+*/
+static void beginRendering_(SK::Renderer::RenderContext* renderContext, 
+	const SK::Renderer::TextureHandle* drawImage, 
+	const SK::Renderer::ClearValue* drawImageClearValue,
+	const SK::Renderer::TextureHandle* depthImage,
+	const SK::Renderer::ClearValue* depthImageClearValue)
 {
+	assert(drawImage && drawImage->isValid());
+	assert(depthImage ? depthImage->isValid() : true);
+
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 
 	VkCommandBuffer cmd = vkRendererBackend->currentCmdBuffer;
-	uint8_t currentFrameIndex = vkRendererBackend->currentFrameIndex;
 
-	VkRenderingAttachmentInfo colorAttachment = SK::VkInit::attachment_info(
-		vkRendererBackend->drawImages[currentFrameIndex].imageView,
-		&vkRendererBackend->colorAttachmentClearValue,
+	const SK::VkRendererBackend::TextureRecord& drawImageRec = vkRenderContext->textures[drawImage->id];
+	VkClearValue vkDrawImageClearValue = drawImageClearValue ? toVkClearValue(*drawImageClearValue) : VkClearValue{};
+	VkRenderingAttachmentInfo colorAttachment = SK::VkInit::attachmentInfo(
+		drawImageRec.image.imageView,
+		drawImageClearValue ? &vkDrawImageClearValue : nullptr,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	);
 
-	VkRenderingAttachmentInfo depthAttachment = SK::VkInit::depth_attachment_info(
-		vkRendererBackend->depthImages[currentFrameIndex].imageView,
-		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
-	);
+	VkRenderingAttachmentInfo depthAttachment;
+	if (depthImage)
+	{
+		const SK::VkRendererBackend::TextureRecord& depthImageRec = vkRenderContext->textures[depthImage->id];
+		VkClearValue vkDepthImageClearValue = depthImageClearValue ? toVkClearValue(*depthImageClearValue) : VkClearValue{};
+		depthAttachment = SK::VkInit::attachmentInfo(
+			depthImageRec.image.imageView,
+			depthImageClearValue ? &vkDepthImageClearValue : nullptr,
+			VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+		);
+	}
 
-	VkRenderingInfo renderInfo = SK::VkInit::rendering_info(
+	VkRenderingInfo renderInfo = SK::VkInit::renderingInfo(
 		vkRendererBackend->drawExtent,
 		&colorAttachment,
-		&depthAttachment
+		depthImage ? &depthAttachment : nullptr
 	);
 
 	vkCmdBeginRendering(cmd, &renderInfo);
@@ -1155,7 +1203,7 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.beginFrame = beginFrame_,
 		.endFrame = endFrame_,
 		.updateSceneBuffer = updateSceneBuffer_,
-		.beginMainRendering = beginMainRendering_,
+		.beginRendering = beginRendering_,
 		.endRendering = endRendering_,
 		.bindPipeline = bindPipeline_,
 		.getSceneDataDescriptorIndex = getSceneDataDescriptorIndex_,

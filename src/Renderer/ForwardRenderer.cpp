@@ -42,7 +42,9 @@ void SK::ForwardRenderer::createResources(SK::Renderer::RenderContext* renderCon
 
 void SK::ForwardRenderer::draw(SK::Renderer::RenderContext* renderContext, const Resources& resources, const Input& input)
 {
-	SK::Renderer::beginMainRendering(renderContext);
+	const SK::Renderer::TextureHandle mainDrawImage = SK::Renderer::getMainDrawImageHandle(renderContext);
+	const SK::Renderer::TextureHandle mainDepthImage = SK::Renderer::getMainDepthImageHandle(renderContext);
+	SK::Renderer::beginRendering(renderContext, &mainDrawImage, nullptr, &mainDepthImage, nullptr);
 
 	std::vector<uint32_t> opaqueDraws;
 	opaqueDraws.reserve(input.drawContext->opaque.size());

@@ -1,5 +1,7 @@
 /*
 	UI Layer
+
+	TODO: UI Layer needs a total refactor. It is highly Vulkan oriented due to ImGUI's nature.
 */
 #pragma once
 

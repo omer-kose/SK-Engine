@@ -197,7 +197,7 @@ bool SK::VkRendererBackend::beginFrame(State* vkRendererBackend)
     VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
     // Begin the command buffer recording. We will submit this command buffer exactly once, so we let Vulkan know that
-    VkCommandBufferBeginInfo cmdBeginInfo = SK::VkInit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    VkCommandBufferBeginInfo cmdBeginInfo = SK::VkInit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     // Start the command buffer recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
@@ -226,10 +226,10 @@ void SK::VkRendererBackend::endFrame(State* vkRendererBackend)
     // Prepare the submission
     // GPU will wait on the swapchainAcquireSemaphore before outputting the final colors. swapchainAcquireSemaphore is set to be signalled in vkAcquireSwapchainImage once the swapchain is done presenting that image.
     // GPU will signal submitSemaphore to signal that rendering has finished
-    VkCommandBufferSubmitInfo cmdSubmitInfo = SK::VkInit::command_buffer_submit_info(cmd);
-    VkSemaphoreSubmitInfo waitInfo = SK::VkInit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, currentFrame.swapchainAcquireSemaphore);
-    VkSemaphoreSubmitInfo signalInfo = SK::VkInit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, vkRendererBackend->submitSemaphores[swapchainImageIndex]);
-    VkSubmitInfo2 submit = SK::VkInit::submit_info(&cmdSubmitInfo, &signalInfo, &waitInfo);
+    VkCommandBufferSubmitInfo cmdSubmitInfo = SK::VkInit::commandBufferSubmitInfo(cmd);
+    VkSemaphoreSubmitInfo waitInfo = SK::VkInit::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, currentFrame.swapchainAcquireSemaphore);
+    VkSemaphoreSubmitInfo signalInfo = SK::VkInit::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, vkRendererBackend->submitSemaphores[swapchainImageIndex]);
+    VkSubmitInfo2 submit = SK::VkInit::submitInfo(&cmdSubmitInfo, &signalInfo, &waitInfo);
 
     // Submit command buffer to the queue and execute it
     // renderFence will be signaled once the submitted command buffer has completed execution.
@@ -261,14 +261,14 @@ void SK::VkRendererBackend::immediateSubmit(State* vkRendererBackend, std::funct
     VK_CHECK(vkResetCommandBuffer(vkRendererBackend->immediateCommandBuffer, 0));
     // Prepare the immediate command buffer for executing function given as the param
     VkCommandBuffer cmd = vkRendererBackend->immediateCommandBuffer;
-    VkCommandBufferBeginInfo cmdBeginInfo = SK::VkInit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    VkCommandBufferBeginInfo cmdBeginInfo = SK::VkInit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
     function(cmd);
     VK_CHECK(vkEndCommandBuffer(cmd));
 
     // Submit
-    VkCommandBufferSubmitInfo cmdSubmitInfo = SK::VkInit::command_buffer_submit_info(cmd);
-    VkSubmitInfo2 submitInfo = SK::VkInit::submit_info(&cmdSubmitInfo, nullptr, nullptr);
+    VkCommandBufferSubmitInfo cmdSubmitInfo = SK::VkInit::commandBufferSubmitInfo(cmd);
+    VkSubmitInfo2 submitInfo = SK::VkInit::submitInfo(&cmdSubmitInfo, nullptr, nullptr);
     VK_CHECK(vkQueueSubmit2(vkRendererBackend->graphicsQueue, 1, &submitInfo, vkRendererBackend->immeadiateFence));
 
     // Wait on the fence until the command buffer finished executing
@@ -349,7 +349,7 @@ AllocatedImage SK::VkRendererBackend::createImage(State* vkRendererBackend, VkEx
     newImage.imageFormat = format;
     newImage.imageExtent = imageExtent;
 
-    VkImageCreateInfo imgInfo = SK::VkInit::image_create_info(format, usage, imageExtent);
+    VkImageCreateInfo imgInfo = SK::VkInit::imageCreateInfo(format, usage, imageExtent);
     if(mipMapped)
     {
         imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(imageExtent.width, imageExtent.height)))) + 1;
@@ -372,7 +372,7 @@ AllocatedImage SK::VkRendererBackend::createImage(State* vkRendererBackend, VkEx
     }
 
     // Create the image-view for the image
-    VkImageViewCreateInfo viewInfo = SK::VkInit::imageview_create_info(format, newImage.image, aspectFlag);
+    VkImageViewCreateInfo viewInfo = SK::VkInit::imageViewCreateInfo(format, newImage.image, aspectFlag);
     viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
 
     VK_CHECK(vkCreateImageView(vkRendererBackend->device, &viewInfo, nullptr, &newImage.imageView));
@@ -439,7 +439,7 @@ VkImageViewCreateInfo SK::VkRendererBackend::createImageViewInfo(State* vkRender
     }
 
     // Create the image-view for the image
-    VkImageViewCreateInfo viewInfo = SK::VkInit::imageview_create_info(image.imageFormat, image.image, aspectFlag);
+    VkImageViewCreateInfo viewInfo = SK::VkInit::imageViewCreateInfo(image.imageFormat, image.image, aspectFlag);
     viewInfo.subresourceRange.levelCount = image.mipLevels;
     
     return viewInfo;
@@ -791,13 +791,13 @@ void SK::VkRendererBackend::initSwapchain(State* vkRendererBackend)
 void SK::VkRendererBackend::initCommands(State* vkRendererBackend)
 {
     // Create the command pool and allow for resetting of individual command buffers
-    VkCommandPoolCreateInfo commandPoolInfo = SK::VkInit::command_pool_create_info(vkRendererBackend->graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    VkCommandPoolCreateInfo commandPoolInfo = SK::VkInit::commandPoolCreateInfo(vkRendererBackend->graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     for(int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         VK_CHECK(vkCreateCommandPool(vkRendererBackend->device, &commandPoolInfo, nullptr, &vkRendererBackend->frames[i].commandPool));
         // Allocate the default command buffer that will be used for rendering
-        VkCommandBufferAllocateInfo cmdAllocInfo = SK::VkInit::command_buffer_allocate_info(vkRendererBackend->frames[i].commandPool, 1);
+        VkCommandBufferAllocateInfo cmdAllocInfo = SK::VkInit::commandBufferAllocateInfo(vkRendererBackend->frames[i].commandPool, 1);
         VK_CHECK(vkAllocateCommandBuffers(vkRendererBackend->device, &cmdAllocInfo, &vkRendererBackend->frames[i].mainCommandBuffer));
     }
 
@@ -805,7 +805,7 @@ void SK::VkRendererBackend::initCommands(State* vkRendererBackend)
     VK_CHECK(vkCreateCommandPool(vkRendererBackend->device, &commandPoolInfo, nullptr, &vkRendererBackend->immediateCommandPool));
 
     // Allocate a command buffer for immediate submits
-    VkCommandBufferAllocateInfo cmdAllocInfo = SK::VkInit::command_buffer_allocate_info(vkRendererBackend->immediateCommandPool, 1);
+    VkCommandBufferAllocateInfo cmdAllocInfo = SK::VkInit::commandBufferAllocateInfo(vkRendererBackend->immediateCommandPool, 1);
 
     VK_CHECK(vkAllocateCommandBuffers(vkRendererBackend->device, &cmdAllocInfo, &vkRendererBackend->immediateCommandBuffer));
 
@@ -821,8 +821,8 @@ void SK::VkRendererBackend::initSyncStructures(State* vkRendererBackend)
     // 1 per-frame semaphore to sync swapchain ready image acquiring.
     // 1 per-swapchain image semaphore to sync swapchain image presentation. Presentation resources are per-swapchain image not per-frame. So, the synchronization should be done per-swapchain basis not frame basis.
     // We want the fence to start signalled so we can wait on it on the first frame
-    VkFenceCreateInfo fenceCreateInfo = SK::VkInit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-    VkSemaphoreCreateInfo semaphoreCreateInfo = SK::VkInit::semaphore_create_info();
+    VkFenceCreateInfo fenceCreateInfo = SK::VkInit::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+    VkSemaphoreCreateInfo semaphoreCreateInfo = SK::VkInit::semaphoreCreateInfo();
 
     for(int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {

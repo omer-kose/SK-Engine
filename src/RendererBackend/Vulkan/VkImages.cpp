@@ -24,7 +24,7 @@ void SK::VkUtil::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayo
 	imageBarrier.newLayout = newLayout;
 
 	VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-	imageBarrier.subresourceRange = SK::VkInit::image_subresource_range(aspectMask);
+	imageBarrier.subresourceRange = SK::VkInit::imageSubresourceRange(aspectMask);
 	imageBarrier.image = image;
 
 	VkDependencyInfo depInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .pNext = nullptr};
@@ -88,7 +88,7 @@ void SK::VkUtil::generateMipmaps(VkCommandBuffer cmd, VkImage image, VkExtent2D 
         imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
         VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageBarrier.subresourceRange = SK::VkInit::image_subresource_range(aspectMask);
+        imageBarrier.subresourceRange = SK::VkInit::imageSubresourceRange(aspectMask);
         imageBarrier.subresourceRange.levelCount = 1;
         imageBarrier.subresourceRange.baseMipLevel = mip;
         imageBarrier.image = image;

@@ -91,14 +91,13 @@ void SK::UI::endFrame()
     ImGui::Render();
 }
 
-// TODO: This will be refactored after frame graph is in. UI still works directly with Vulkan backend does a copy that is not its job. 
 void SK::UI::draw(SK::VkRendererBackend::State* vkRendererBackend)
 {
     VkCommandBuffer cmd = vkRendererBackend->currentCmdBuffer;
     uint32_t swapchainImageIndex = vkRendererBackend->currentSwapchainImageIndex;
 
-    VkRenderingAttachmentInfo colorAttachment = SK::VkInit::attachment_info(vkRendererBackend->swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    VkRenderingInfo renderInfo = SK::VkInit::rendering_info(vkRendererBackend->swapchainExtent, &colorAttachment, nullptr);
+    VkRenderingAttachmentInfo colorAttachment = SK::VkInit::attachmentInfo(vkRendererBackend->swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingInfo renderInfo = SK::VkInit::renderingInfo(vkRendererBackend->swapchainExtent, &colorAttachment, nullptr);
 
     vkCmdBeginRendering(cmd, &renderInfo);
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);

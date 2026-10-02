@@ -144,6 +144,25 @@ namespace SK::Renderer
 		Sampler
 	};
 
+	union ClearColorValue
+	{
+		float float32[4];
+		int32_t int32[4];
+		uint32_t uint32[4];
+	};
+
+	struct ClearDepthStencilValue
+	{
+		float depth;
+		uint32_t stencil;
+	};
+
+	union ClearValue
+	{
+		ClearColorValue color;
+		ClearDepthStencilValue depthStencil;
+	};
+
 	/*
 		While Vulkan has the concept of Descriptor sets, DX12 does not. It has register slot logic which more or less corresponds to binding slots in Vulkan.
 		To keep RenderContext Graphics API Agnostic, Vulkan pipelines will map every resource to set = 0 by default. So, there is only binding slots in the mapping description.
@@ -406,7 +425,7 @@ namespace SK::Renderer
 		void (*endFrame)(RenderContext* renderContext);
 		void (*updateSceneBuffer)(RenderContext* renderContext, const SK::Renderer::GPUSceneData& gpuSceneData);
 
-		void (*beginMainRendering)(RenderContext* renderContext);
+		void (*beginRendering)(RenderContext* renderContext, const TextureHandle* drawImage, const ClearValue* drawImageClearValue, const TextureHandle* depthImage, const ClearValue* depthImageClearValue);
 		void (*endRendering)(RenderContext* renderContext);
 
 		void (*bindPipeline)(RenderContext* renderContext, PipelineHandle pipeline);
@@ -459,7 +478,7 @@ namespace SK::Renderer
 	void endFrame(RenderContext* renderContext);
 	void updateSceneBuffer(RenderContext* renderContext, const SK::Renderer::GPUSceneData& gpuSceneData);
 
-	void beginMainRendering(RenderContext* renderContext);
+	void beginRendering(RenderContext* renderContext, const TextureHandle* drawImage, const ClearValue* drawImageClearValue, const TextureHandle* depthImage, const ClearValue* depthImageClearValue);
 	void endRendering(RenderContext* renderContext);
 
 	void bindPipeline(RenderContext* renderContext, PipelineHandle pipeline);

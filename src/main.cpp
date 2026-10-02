@@ -148,6 +148,22 @@ int main(int argc, char* argv[])
                 "Main Depth Image"
             );
 
+            frameGraph.addPass("Screen Clear Pass",
+                [&](SK::Renderer::FrameGraphPassBuilder& builder) {
+                    builder.writeTexture(fgMainDrawImageResourceHandle, SK::Renderer::FrameGraphResourceState::ColorAttachment, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));
+                    builder.writeTexture(fgMainDepthImageResourceHandle, SK::Renderer::FrameGraphResourceState::DepthStencilAttachment, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));
+                },
+                [&](const SK::Renderer::FrameGraphPassContext& context) {
+                    const SK::Renderer::TextureHandle mainDrawImage = context.getTexture(fgMainDrawImageResourceHandle);
+                    const SK::Renderer::TextureHandle mainDepthImage = context.getTexture(fgMainDepthImageResourceHandle);
+                    SK::Renderer::ClearValue mainDrawImageClearValue = SK::Renderer::ClearValue{ .color = { 0.0f, 0.0f, 0.0f, 1.0f } };
+                    SK::Renderer::ClearValue mainDepthImageClearValue = SK::Renderer::ClearValue{ .depthStencil = {.depth = 1.0f } };
+
+                    SK::Renderer::beginRendering(&renderContext, &mainDrawImage, &mainDrawImageClearValue, &mainDepthImage, &mainDepthImageClearValue);
+                    SK::Renderer::endRendering(&renderContext);
+                }
+            );
+
             frameGraph.addPass("Forward Rendering",
                 [&](SK::Renderer::FrameGraphPassBuilder& builder) {
                     builder.writeTexture(fgMainDrawImageResourceHandle, SK::Renderer::FrameGraphResourceState::ColorAttachment, SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None));

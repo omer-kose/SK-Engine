@@ -191,13 +191,13 @@ void SK::Renderer::executeFrameGraphBarriers(RenderContext* renderContext, const
 	renderContext->api->executeFrameGraphBarriers(renderContext, fg, barriers);
 }
 
-void SK::Renderer::beginMainRendering(RenderContext* renderContext)
+void SK::Renderer::beginRendering(RenderContext* renderContext, const TextureHandle* drawImage, const ClearValue* drawImageClearValue, const TextureHandle* depthImage, const ClearValue* depthImageClearValue)
 {
 	assert(renderContext != nullptr);
 	assert(renderContext->api != nullptr);
-	assert(renderContext->api->beginMainRendering != nullptr);
+	assert(renderContext->api->beginRendering != nullptr);
 
-	renderContext->api->beginMainRendering(renderContext);
+	renderContext->api->beginRendering(renderContext, drawImage, drawImageClearValue, depthImage, depthImageClearValue);
 }
 
 void SK::Renderer::endRendering(RenderContext* renderContext)

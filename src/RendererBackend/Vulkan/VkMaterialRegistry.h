@@ -2,8 +2,6 @@
 
 #include <vector>
 #include <RendererBackend/Vulkan/VkTypes.h>
-// TODO: To be deleted
-#include <RendererBackend/Vulkan/VkDescriptors.h>
 #include <RendererBackend/Vulkan/VkDescriptorHeap.h>
 
 #include <MaterialSystem/MaterialInfo.h>

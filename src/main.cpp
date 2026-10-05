@@ -122,7 +122,6 @@ int main(int argc, char* argv[])
             SK::Renderer::updateSceneBuffer(&renderContext, scene.gpuSceneData);
 
             SK::Renderer::FrameGraph frameGraph;
-            frameGraph.init(SK::Renderer::getFrameIndex(&renderContext));
 
             SK::Renderer::FrameGraphResourceHandle fgSwapchainResourceHandle = frameGraph.importTexture(
                 swapchainImageHandle,

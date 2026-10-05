@@ -336,12 +336,6 @@ void SK::Renderer::FrameGraphPassBuilder::setNeverCull()
 
     frameGraph->passes[passIndex].neverCull = true;
 }
-
-void SK::Renderer::FrameGraph::init(uint32_t frameIndex_)
-{
-    frameIndex = frameIndex_;
-}
-
 void SK::Renderer::FrameGraph::clear()
 {
     passes.clear();

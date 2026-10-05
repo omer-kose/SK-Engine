@@ -324,10 +324,8 @@ namespace SK::Renderer
 		FrameGraphBlackboard blackboard{};
 		FrameGraphCompiledPlan compiledPlan;
 
-		uint32_t frameIndex = 0;
 		bool compiled = false;
 
-		void init(uint32_t frameIndex_);
 		void clear();
 
 		FrameGraphResourceHandle importTexture(TextureHandle texture, const TextureDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName);

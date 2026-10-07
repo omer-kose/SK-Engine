@@ -793,8 +793,10 @@ static const SK::Renderer::BufferHandle createBuffer_(SK::Renderer::RenderContex
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 
 	SK::VkRendererBackend::BufferRecord bufferRecord;
-	bufferRecord.debugName = desc.debugName;
 	bufferRecord.desc = desc;
+	bufferRecord.ownsMemory = true;
+	bufferRecord.debugName = desc.debugName;
+
 
 	if (!desc.data)
 	{
@@ -844,8 +846,9 @@ static const SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderCont
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 
 	SK::VkRendererBackend::TextureRecord textureRecord;
-	textureRecord.debugName = textureDesc.debugName;
 	textureRecord.desc = textureDesc;
+	textureRecord.debugName = textureDesc.debugName;
+	textureRecord.ownsMemory = true;
 
 	if (textureDesc.data)
 	{
@@ -1140,8 +1143,9 @@ static void registerBackendInternalImages_(SK::VkRendererBackend::VkRenderContex
 		record.image.allocation = VK_NULL_HANDLE; // not allocated by the vkRenderContext
 		record.image.imageFormat = toVkFormat(desc.format);
 		record.image.imageExtent = toVkExtent3D(desc.imageExtent);
-		record.debugName = desc.debugName;
 		record.desc = desc;
+		record.debugName = desc.debugName;
+		record.ownsMemory = false;
 
 		const uint32_t index = static_cast<uint32_t>(vkRenderContext->textures.size());
 		vkRenderContext->textures.push_back(record);
@@ -1237,12 +1241,15 @@ void SK::VkRendererBackend::clearVkRenderContext(VkRenderContext* vkRenderContex
 	{
 		for (size_t i = 0; i < vkRenderContext->buffers.size(); ++i)
 		{
-			SK::VkRendererBackend::destroyBuffer(vkRenderContext->vkRendererBackend, vkRenderContext->buffers[i].buffer);
+			if (vkRenderContext->buffers[i].ownsMemory)
+			{
+				SK::VkRendererBackend::destroyBuffer(vkRenderContext->vkRendererBackend, vkRenderContext->buffers[i].buffer);
+			}
 		}
 
 		for (size_t i = 0; i < vkRenderContext->textures.size(); ++i)
 		{
-			if (i != vkRenderContext->swapchainImageHandle.id && i != vkRenderContext->mainDrawImageHandle.id && i != vkRenderContext->mainDepthImageHandle.id)
+			if (vkRenderContext->textures[i].ownsMemory)
 			{
 				SK::VkRendererBackend::destroyImage(vkRenderContext->vkRendererBackend, vkRenderContext->textures[i].image);
 			}

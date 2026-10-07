@@ -24,6 +24,7 @@ namespace SK::VkRendererBackend
 	{
 		SK::Renderer::BufferDesc desc{}; // cached
 		AllocatedBuffer buffer;
+		bool ownsMemory = false;
 		const char* debugName = nullptr;
 	};
 
@@ -32,6 +33,7 @@ namespace SK::VkRendererBackend
 		SK::Renderer::TextureDesc desc{}; // cached
 		AllocatedImage image;
 		uint8_t samplerIndex; // descriptor index of the sampler
+		bool ownsMemory = false;
 		const char* debugName = nullptr;
 	};
 

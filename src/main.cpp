@@ -68,8 +68,7 @@ int main(int argc, char* argv[])
     eventContext.scene = &scene;
 
     // Renderer frontends
-    SK::ForwardRenderer::Resources forwardRendererResources;
-    SK::ForwardRenderer::createResources(&renderContext, &forwardRendererResources);
+    SK::ForwardRenderer::init(&renderContext);
 
     // Until I have a rendering orchestrator, these will be here.
     const SK::Renderer::TextureHandle swapchainImageHandle = SK::Renderer::getSwapchainImageHandle(&renderContext);
@@ -171,7 +170,7 @@ int main(int argc, char* argv[])
                 [&](const SK::Renderer::FrameGraphPassContext& context) {
                     SK::ForwardRenderer::Input forwardInput{};
                     forwardInput.drawContext = &scene.drawContext;
-                    SK::ForwardRenderer::draw(context.renderContext, forwardRendererResources, forwardInput);
+                    SK::ForwardRenderer::draw(context.renderContext, forwardInput);
                 }
             );
 
@@ -215,6 +214,9 @@ int main(int argc, char* argv[])
 
     // Make sure that GPU finished executing every command before shutting down the systems.
     vkDeviceWaitIdle(vkRendererBackend.device);
+
+    // Clear the renderer frontends
+    SK::ForwardRenderer::clear();
 
     // Need to force flush to make sure that the transient resources are cleaned up before cleaning up the containers in backend render context.
     SK::Renderer::forceFlushFrameDeletionQueues(&renderContext);

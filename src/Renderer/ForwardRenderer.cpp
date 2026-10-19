@@ -5,95 +5,135 @@
 #include <chrono>
 #include <algorithm>
 
-void SK::ForwardRenderer::createResources(SK::Renderer::RenderContext* renderContext, Resources* resources)
+namespace SK::ForwardRenderer
 {
-	SK::Renderer::GraphicsPipelineDesc opaqueDesc{};
-	opaqueDesc.debugName = "Forward Opaque";
-	opaqueDesc.shaders = {
-		{ "../../shaders/glsl/forward/forward_vert.spv", SK::Renderer::ShaderStageFlagBits::VertexShader },
-		{ "../../shaders/glsl/forward/forward_frag.spv", SK::Renderer::ShaderStageFlagBits::FragmentShader }
-	};
-	opaqueDesc.topology = SK::Renderer::PrimitiveTopology::TriangleList;
-	opaqueDesc.polygonMode = SK::Renderer::PolygonMode::Fill;
-	opaqueDesc.cullMode = SK::Renderer::CullMode::Back;
-	opaqueDesc.frontFace = SK::Renderer::FrontFace::CounterClockwise;
-	opaqueDesc.depthTest = true;
-	opaqueDesc.depthWrite = true;
-	opaqueDesc.depthCompare = SK::Renderer::CompareOp::LessOrEqual;
-	opaqueDesc.blending = false;
-	opaqueDesc.shaderResourceMappings = {
-		{ 0, SK::Renderer::ShaderResourceType::UniformBuffer, SK::Renderer::getSceneDataDescriptorIndex(renderContext) },
-		{ 1, SK::Renderer::ShaderResourceType::ReadOnlyStorageBuffer, SK::Renderer::getMaterialDataDescriptorIndex(renderContext) },
-		// textures and samplers are accessed via the material buffer in the shaders, so their descriptorIndex field left 0.
-		{ 2, SK::Renderer::ShaderResourceType::SampledImage, 0 },
-		{ 3, SK::Renderer::ShaderResourceType::Sampler, 0 }
-	};
-
-	resources->opaquePipeline = SK::Renderer::getGraphicsPipeline(renderContext, opaqueDesc);
-
-	SK::Renderer::GraphicsPipelineDesc transparentDesc = opaqueDesc;
-	transparentDesc.debugName = "Forward Transparent";
-	transparentDesc.depthTest = false;
-	transparentDesc.depthWrite = false;
-	transparentDesc.blending = true;
-
-	resources->transparentPipeline = SK::Renderer::getGraphicsPipeline(renderContext, transparentDesc);
-}
-
-void SK::ForwardRenderer::draw(SK::Renderer::RenderContext* renderContext, const Resources& resources, const Input& input)
-{
-	const SK::Renderer::TextureHandle mainDrawImage = SK::Renderer::getMainDrawImageHandle(renderContext);
-	const SK::Renderer::TextureHandle mainDepthImage = SK::Renderer::getMainDepthImageHandle(renderContext);
-	SK::Renderer::beginRendering(renderContext, &mainDrawImage, nullptr, &mainDepthImage, nullptr);
-
-	std::vector<uint32_t> opaqueDraws;
-	opaqueDraws.reserve(input.drawContext->opaque.size());
-
-	for (uint32_t i = 0; i < input.drawContext->opaque.size(); ++i)
+	// Internal structs and hidden state
+	namespace
 	{
-		opaqueDraws.push_back(i);
+		struct Resources
+		{
+			SK::Renderer::PipelineHandle opaquePipeline;
+			SK::Renderer::PipelineHandle transparentPipeline;
+		};
+
+		// Push data for mesh draws
+		struct PushData
+		{
+			glm::mat4 worldMatrix;
+			SK::Renderer::BufferDeviceAddress vertexBufferAddress;
+			uint32_t frameIndex;
+			uint32_t materialIndex;
+		};
+
+		// Hidden state
+		Resources s_resources = {};
+		bool s_initialized = false;
 	}
 
-	std::sort(opaqueDraws.begin(), opaqueDraws.end(), [&](uint32_t iA, uint32_t iB) {
-		const SK::Renderer::DrawPacket& a = input.drawContext->opaque[iA];
-		const SK::Renderer::DrawPacket& b = input.drawContext->opaque[iB];
+	void ForwardRenderer::init(SK::Renderer::RenderContext* renderContext)
+	{
+		assert(!s_initialized);
 
-		return a.meshIndex < b.meshIndex;
-		});
+		SK::Renderer::GraphicsPipelineDesc opaqueDesc{};
+		opaqueDesc.debugName = "Forward Opaque";
+		opaqueDesc.shaders = {
+			{ "../../shaders/glsl/forward/forward_vert.spv", SK::Renderer::ShaderStageFlagBits::VertexShader },
+			{ "../../shaders/glsl/forward/forward_frag.spv", SK::Renderer::ShaderStageFlagBits::FragmentShader }
+		};
+		opaqueDesc.topology = SK::Renderer::PrimitiveTopology::TriangleList;
+		opaqueDesc.polygonMode = SK::Renderer::PolygonMode::Fill;
+		opaqueDesc.cullMode = SK::Renderer::CullMode::Back;
+		opaqueDesc.frontFace = SK::Renderer::FrontFace::CounterClockwise;
+		opaqueDesc.depthTest = true;
+		opaqueDesc.depthWrite = true;
+		opaqueDesc.depthCompare = SK::Renderer::CompareOp::LessOrEqual;
+		opaqueDesc.blending = false;
+		opaqueDesc.shaderResourceMappings = {
+			{ 0, SK::Renderer::ShaderResourceType::UniformBuffer, SK::Renderer::getSceneDataDescriptorIndex(renderContext) },
+			{ 1, SK::Renderer::ShaderResourceType::ReadOnlyStorageBuffer, SK::Renderer::getMaterialDataDescriptorIndex(renderContext) },
+			// textures and samplers are accessed via the material buffer in the shaders, so their descriptorIndex field left 0.
+			{ 2, SK::Renderer::ShaderResourceType::SampledImage, 0 },
+			{ 3, SK::Renderer::ShaderResourceType::Sampler, 0 }
+		};
 
-	uint32_t lastMeshIndex = UINT32_MAX;
+		s_resources.opaquePipeline = SK::Renderer::getGraphicsPipeline(renderContext, opaqueDesc);
 
-	auto drawPacket = [&](const SK::Renderer::DrawPacket& packet) {
-		PushData pushConstants{};
-		pushConstants.worldMatrix = packet.worldTransform;
-		pushConstants.vertexBufferAddress = SK::Renderer::getVertexBufferDeviceAddress(renderContext, packet.meshIndex);
-		pushConstants.frameIndex = SK::Renderer::getFrameIndex(renderContext);
-		pushConstants.materialIndex = packet.materialIndex;
+		SK::Renderer::GraphicsPipelineDesc transparentDesc = opaqueDesc;
+		transparentDesc.debugName = "Forward Transparent";
+		transparentDesc.depthTest = false;
+		transparentDesc.depthWrite = false;
+		transparentDesc.blending = true;
 
-		SK::Renderer::pushData(renderContext, 0, sizeof(PushData), &pushConstants);
+		s_resources.transparentPipeline = SK::Renderer::getGraphicsPipeline(renderContext, transparentDesc);
 
-		if (lastMeshIndex != packet.meshIndex)
+		s_initialized = true;
+	}
+
+	void ForwardRenderer::draw(SK::Renderer::RenderContext* renderContext, const Input& input)
+	{
+		const SK::Renderer::TextureHandle mainDrawImage = SK::Renderer::getMainDrawImageHandle(renderContext);
+		const SK::Renderer::TextureHandle mainDepthImage = SK::Renderer::getMainDepthImageHandle(renderContext);
+		SK::Renderer::beginRendering(renderContext, &mainDrawImage, nullptr, &mainDepthImage, nullptr);
+
+		std::vector<uint32_t> opaqueDraws;
+		opaqueDraws.reserve(input.drawContext->opaque.size());
+
+		for (uint32_t i = 0; i < input.drawContext->opaque.size(); ++i)
 		{
-			lastMeshIndex = packet.meshIndex;
-			SK::Renderer::bindIndexBuffer(renderContext, packet.meshIndex, SK::Renderer::IndexType::Uint32);
+			opaqueDraws.push_back(i);
 		}
 
-		SK::Renderer::drawIndexed(renderContext, packet.indexCount, 1, packet.startIndex, 0, 0);
-	};
+		std::sort(opaqueDraws.begin(), opaqueDraws.end(), [&](uint32_t iA, uint32_t iB) {
+			const SK::Renderer::DrawPacket& a = input.drawContext->opaque[iA];
+			const SK::Renderer::DrawPacket& b = input.drawContext->opaque[iB];
 
-	SK::Renderer::bindPipeline(renderContext, resources.opaquePipeline);
+			return a.meshIndex < b.meshIndex;
+			});
 
-	for (uint32_t drawIndex : opaqueDraws)
-	{
-		drawPacket(input.drawContext->opaque[drawIndex]);
+		uint32_t lastMeshIndex = UINT32_MAX;
+
+		auto drawPacket = [&](const SK::Renderer::DrawPacket& packet) {
+			PushData pushConstants{};
+			pushConstants.worldMatrix = packet.worldTransform;
+			pushConstants.vertexBufferAddress = SK::Renderer::getVertexBufferDeviceAddress(renderContext, packet.meshIndex);
+			pushConstants.frameIndex = SK::Renderer::getFrameIndex(renderContext);
+			pushConstants.materialIndex = packet.materialIndex;
+
+			SK::Renderer::pushData(renderContext, 0, sizeof(PushData), &pushConstants);
+
+			if (lastMeshIndex != packet.meshIndex)
+			{
+				lastMeshIndex = packet.meshIndex;
+				SK::Renderer::bindIndexBuffer(renderContext, packet.meshIndex, SK::Renderer::IndexType::Uint32);
+			}
+
+			SK::Renderer::drawIndexed(renderContext, packet.indexCount, 1, packet.startIndex, 0, 0);
+			};
+
+		SK::Renderer::bindPipeline(renderContext, s_resources.opaquePipeline);
+
+		for (uint32_t drawIndex : opaqueDraws)
+		{
+			drawPacket(input.drawContext->opaque[drawIndex]);
+		}
+
+		SK::Renderer::bindPipeline(renderContext, s_resources.transparentPipeline);
+
+		for (const SK::Renderer::DrawPacket& packet : input.drawContext->transparent)
+		{
+			drawPacket(packet);
+		}
+
+		SK::Renderer::endRendering(renderContext);
+
 	}
 
-	SK::Renderer::bindPipeline(renderContext, resources.transparentPipeline);
-
-	for (const SK::Renderer::DrawPacket& packet : input.drawContext->transparent)
+	void ForwardRenderer::clear()
 	{
-		drawPacket(packet);
-	}
+		assert(s_initialized);
 
-	SK::Renderer::endRendering(renderContext);
+		// Render Context allocated resources are cleared by the contexts themselves, no need to clear them.
+		s_resources = {};
+		s_initialized = false;
+	}
 }

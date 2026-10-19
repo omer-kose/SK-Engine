@@ -2,36 +2,15 @@
 
 #include <queue>
 
+static bool isBufferResource(const SK::Renderer::FrameGraphResourceEntry& entry)
+{
+    return std::holds_alternative<SK::Renderer::BufferHandle>(entry.backendHandle);
+}
+
+
 static bool isTextureResource(const SK::Renderer::FrameGraphResourceEntry& entry)
 {
 	return std::holds_alternative<SK::Renderer::TextureHandle>(entry.backendHandle);
-}
-
-static bool isBufferResource(const SK::Renderer::FrameGraphResourceEntry& entry)
-{
-	return std::holds_alternative<SK::Renderer::BufferHandle>(entry.backendHandle);
-}
-
-static bool isTextureState(SK::Renderer::FrameGraphResourceState state)
-{
-    using State = SK::Renderer::FrameGraphResourceState;
-
-    switch (state)
-    {
-    case State::ColorAttachment:
-    case State::DepthStencilAttachment:
-    case State::ShaderRead:
-    case State::StorageRead:
-    case State::StorageWrite:
-    case State::StorageReadWrite:
-    case State::TransferRead:
-    case State::TransferWrite:
-    case State::Present:
-        return true;
-
-    default:
-        return false;
-    }
 }
 
 static bool isBufferState(SK::Renderer::FrameGraphResourceState state)
@@ -50,6 +29,28 @@ static bool isBufferState(SK::Renderer::FrameGraphResourceState state)
     case State::IndexBuffer:
     case State::UniformBuffer:
     case State::IndirectBuffer:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static bool isTextureState(SK::Renderer::FrameGraphResourceState state)
+{
+    using State = SK::Renderer::FrameGraphResourceState;
+
+    switch (state)
+    {
+    case State::ColorAttachment:
+    case State::DepthStencilAttachment:
+    case State::ShaderRead:
+    case State::StorageRead:
+    case State::StorageWrite:
+    case State::StorageReadWrite:
+    case State::TransferRead:
+    case State::TransferWrite:
+    case State::Present:
         return true;
 
     default:
@@ -347,31 +348,6 @@ void SK::Renderer::FrameGraph::clear()
     compiled = false;
 }
 
-SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importTexture(TextureHandle texture, const TextureDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName)
-{
-    assert(compiled == false);
-    assert(texture.id != INVALID_HANDLE);
-    assert(debugName != nullptr);
-    assert(isValidImportState(initialState, true));
-    assert(finalState.has_value() ? isTextureState(finalState.value()) : true);
-
-    const SK::Renderer::FrameGraphResourceIndex resourceIndex = static_cast<SK::Renderer::FrameGraphResourceIndex>(resourceEntries.size());
-
-    SK::Renderer::FrameGraphResourceEntry entry{};
-    entry.desc = desc;
-    entry.backendHandle = texture;
-    entry.versions.push_back({});
-    entry.currentState = initialState;
-    entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
-    entry.finalState = finalState;
-    entry.imported = true;
-    entry.debugName = debugName;
-
-    resourceEntries.push_back(std::move(entry));
-
-    return { resourceIndex };
-}
-
 SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importBuffer(BufferHandle buffer, const BufferDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName)
 {
     assert(compiled == false);
@@ -390,11 +366,136 @@ SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importBuffer(Bu
     entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
     entry.finalState = finalState;
     entry.imported = true;
+    entry.transient = false;
     entry.debugName = debugName;
 
     resourceEntries.push_back(std::move(entry));
 
     return { resourceIndex };
+}
+
+SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::importTexture(TextureHandle texture, const TextureDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName)
+{
+    assert(compiled == false);
+    assert(texture.id != INVALID_HANDLE);
+    assert(debugName != nullptr);
+    assert(isValidImportState(initialState, true));
+    assert(finalState.has_value() ? isTextureState(finalState.value()) : true);
+
+    const SK::Renderer::FrameGraphResourceIndex resourceIndex = static_cast<SK::Renderer::FrameGraphResourceIndex>(resourceEntries.size());
+
+    SK::Renderer::FrameGraphResourceEntry entry{};
+    entry.desc = desc;
+    entry.backendHandle = texture;
+    entry.versions.push_back({});
+    entry.currentState = initialState;
+    entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
+    entry.finalState = finalState;
+    entry.imported = true;
+    entry.transient = false;
+    entry.debugName = debugName;
+
+    resourceEntries.push_back(std::move(entry));
+
+    return { resourceIndex };
+}
+
+SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::createTransientBuffer(const SK::Renderer::BufferDesc& desc, const char* debugName)
+{
+    assert(compiled == false);
+    assert(debugName != nullptr);
+
+    const FrameGraphResourceIndex resourceIndex = static_cast<FrameGraphResourceIndex>(resourceEntries.size());
+
+    FrameGraphResourceEntry entry{};
+    entry.desc = desc;
+    entry.backendHandle = BufferHandle{}; // will be filled after transient plan
+    entry.versions.push_back({});
+    entry.currentState = FrameGraphResourceState::Undefined;
+    entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
+    entry.finalState = std::nullopt;
+    entry.imported = false;
+    entry.transient = true;
+    entry.debugName = debugName;
+
+    resourceEntries.push_back(std::move(entry));
+    return { resourceIndex };
+}
+
+SK::Renderer::FrameGraphResourceHandle SK::Renderer::FrameGraph::createTransientTexture(const SK::Renderer::TextureDesc& desc, const char* debugName)
+{
+    assert(compiled == false);
+    assert(debugName != nullptr);
+
+    const FrameGraphResourceIndex resourceIndex = static_cast<FrameGraphResourceIndex>(resourceEntries.size());
+
+    FrameGraphResourceEntry entry{};
+    entry.desc = desc;
+    entry.backendHandle = TextureHandle{}; // will be filled after transient plan
+    entry.versions.push_back({});
+    entry.currentState = FrameGraphResourceState::Undefined;
+    entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
+    entry.finalState = std::nullopt;
+    entry.imported = false;
+    entry.transient = true;
+    entry.debugName = debugName;
+
+    resourceEntries.push_back(std::move(entry));
+    return { resourceIndex };
+}
+
+struct ResourceLifetime
+{
+    SK::Renderer::FrameGraphResourceIndex resourceIndex = SK::Renderer::INVALID_FRAME_GRAPH_RESOURCE;
+    uint32_t firstUse = UINT32_MAX;
+    uint32_t lastUse = 0;
+};
+
+static std::vector<ResourceLifetime> computeLifetimes(const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphPassIndex>& sorted)
+{
+    std::vector<ResourceLifetime> lifetimeByResource(fg.resourceEntries.size());
+    std::vector<bool> processed(fg.resourceEntries.size(), false);
+
+    auto process = [&](const SK::Renderer::FrameGraphResourceUsage& usage, uint32_t orderIndex) {
+        const SK::Renderer::FrameGraphResourceIndex resourceIndex = usage.resource.index;
+
+        if (!fg.resourceEntries[resourceIndex].transient)
+        {
+            return;
+        }
+
+        ResourceLifetime& lt = lifetimeByResource[resourceIndex];
+        lt.resourceIndex = resourceIndex;
+        lt.firstUse = std::min(lt.firstUse, orderIndex);
+        lt.lastUse = std::max(lt.lastUse, orderIndex);
+        processed[resourceIndex] = true;
+    };
+
+    for (uint32_t orderIndex = 0; orderIndex < sorted.size(); ++orderIndex)
+    {
+        const SK::Renderer::FrameGraphPassIndex passIndex = sorted[orderIndex];
+        const SK::Renderer::FrameGraphPass& pass = fg.passes[passIndex];
+
+        if (!pass.alive)
+        {
+            continue;
+        }
+
+        for (const auto& usage : pass.reads) process(usage, orderIndex);
+        for (const auto& usage : pass.writes) process(usage, orderIndex);
+        for (const auto& usage : pass.readWrites) process(usage, orderIndex);
+    }
+
+    std::vector<ResourceLifetime> lifetimes;
+    for (uint32_t r = 0; r < lifetimeByResource.size(); ++r)
+    {
+        if (processed[r])
+        {
+            lifetimes.push_back(lifetimeByResource[r]);
+        }
+    }
+
+    return lifetimes;
 }
 
 bool SK::Renderer::FrameGraph::compile(RenderContext* renderContext)
@@ -417,6 +518,8 @@ bool SK::Renderer::FrameGraph::compile(RenderContext* renderContext)
     cull(sorted);
 
     compiledPlan.sortedPasses = sorted;
+
+    planTransientResources(renderContext, sorted);
     computeBarriers(sorted);
 
     compiled = true;
@@ -700,5 +803,48 @@ void SK::Renderer::FrameGraph::computeBarriers(const std::vector<FrameGraphPassI
 
         entry.currentState = requiredState;
         entry.currentShaderStages = SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::None);
+    }
+}
+
+void SK::Renderer::FrameGraph::planTransientResources(SK::Renderer::RenderContext* renderContext, const std::vector<FrameGraphPassIndex>& sorted)
+{
+    std::vector<ResourceLifetime> lifetimes = computeLifetimes(*this, sorted);
+    
+    if (lifetimes.empty())
+    {
+        return;
+    }
+
+    std::vector<TransientResourceRequest> requests;
+    requests.reserve(lifetimes.size());
+
+    for (const ResourceLifetime& lt : lifetimes)
+    {
+        const SK::Renderer::FrameGraphResourceEntry& entry = resourceEntries[lt.resourceIndex];
+
+        TransientResourceRequest req{};
+        req.frameGraphResourceIndex = lt.resourceIndex;
+        req.desc = entry.desc;
+        req.firstUse = lt.firstUse;
+        req.lastUse = lt.lastUse;
+
+        requests.push_back(std::move(req));
+    }
+
+    SK::Renderer::TransientPlan plan = SK::Renderer::planTransientMemory(renderContext, requests);
+
+    for (const SK::Renderer::TransientPlacement& p : plan.placements)
+    {
+        FrameGraphResourceEntry& entry = resourceEntries[p.frameGraphResourceIndex];
+        if (isBufferResource(entry))
+        {
+            entry.backendHandle = FrameGraphResourceBackendHandle{ SK::Renderer::createPlacedBuffer(renderContext, std::get<SK::Renderer::BufferDesc>(entry.desc), p.offset) };
+            SK::Renderer::destroyBufferDeferred(renderContext, std::get<SK::Renderer::BufferHandle>(entry.backendHandle));
+        }
+        else
+        {
+            entry.backendHandle = FrameGraphResourceBackendHandle{ SK::Renderer::createPlacedTexture(renderContext, std::get<SK::Renderer::TextureDesc>(entry.desc), p.offset) };
+            SK::Renderer::destroyTextureDeferred(renderContext, std::get<SK::Renderer::TextureHandle>(entry.backendHandle));
+        }
     }
 }

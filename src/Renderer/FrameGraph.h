@@ -68,8 +68,8 @@ namespace SK::Renderer
 		std::variant makes the type explicit while avoiding the wasted
 		memory that would result from storing both descriptions/handles.
 	*/
-	using FrameGraphResourceDesc = std::variant<TextureDesc, BufferDesc>;
-	using FrameGraphResourceBackendHandle = std::variant<TextureHandle, BufferHandle>; // the actual resource handle into the render context (thus to the backend handle)
+	using FrameGraphResourceDesc = std::variant<BufferDesc, TextureDesc>;
+	using FrameGraphResourceBackendHandle = std::variant<BufferHandle, TextureHandle>; // the actual resource handle into the render context (thus to the backend handle)
 
 	struct FrameGraphResourceVersion
 	{
@@ -111,6 +111,7 @@ namespace SK::Renderer
 		std::optional<FrameGraphResourceState> finalState = std::nullopt;
 
 		bool imported = false;
+		bool transient = false;
 		const char* debugName = nullptr;
 	};
 
@@ -328,8 +329,11 @@ namespace SK::Renderer
 
 		void clear();
 
-		FrameGraphResourceHandle importTexture(TextureHandle texture, const TextureDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName);
 		FrameGraphResourceHandle importBuffer(BufferHandle buffer, const BufferDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName);
+		FrameGraphResourceHandle importTexture(TextureHandle texture, const TextureDesc& desc, FrameGraphResourceState initialState, std::optional<FrameGraphResourceState> finalState, const char* debugName);
+
+		FrameGraphResourceHandle createTransientBuffer(const SK::Renderer::BufferDesc& desc, const char* debugName);
+		FrameGraphResourceHandle createTransientTexture(const SK::Renderer::TextureDesc& desc, const char* debugName);
 
 		template<typename SetupFn, typename ExecuteFn>
 		FrameGraphPassIndex addPass(const char* name, SetupFn&& setup, ExecuteFn&& execute)
@@ -367,6 +371,8 @@ namespace SK::Renderer
 		void cull(const std::vector<FrameGraphPassIndex>& sorted);
 		bool validateUsage(const FrameGraphResourceUsage& usage, bool reads, bool writes) const; // used by computeBarriers for debugging purposes
 		void computeBarriers(const std::vector<FrameGraphPassIndex>& sorted);
+
+		void planTransientResources(SK::Renderer::RenderContext* renderContext, const std::vector<FrameGraphPassIndex>& sorted);
 	};
 
 };

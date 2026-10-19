@@ -146,6 +146,51 @@ const SK::Renderer::TextureDesc& SK::Renderer::getTextureDesc(RenderContext* ren
 	return renderContext->api->getTextureDesc(renderContext, handle);
 }
 
+const SK::Renderer::TransientPlan SK::Renderer::planTransientMemory(RenderContext* renderContext, const std::vector<TransientResourceRequest>& requests)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->planTransientMemory!= nullptr);
+
+	return renderContext->api->planTransientMemory(renderContext, requests);
+}
+
+const SK::Renderer::BufferHandle SK::Renderer::createPlacedBuffer(RenderContext* renderContext, const BufferDesc& desc, size_t offset)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->createPlacedBuffer != nullptr);
+
+	return renderContext->api->createPlacedBuffer(renderContext, desc, offset);
+}
+
+const SK::Renderer::TextureHandle SK::Renderer::createPlacedTexture(RenderContext* renderContext, const TextureDesc& desc, size_t offset)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->createPlacedTexture != nullptr);
+
+	return renderContext->api->createPlacedTexture(renderContext, desc, offset);
+}
+
+void SK::Renderer::destroyBufferDeferred(RenderContext* renderContext, BufferHandle handle)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->destroyBufferDeferred != nullptr);
+
+	renderContext->api->destroyBufferDeferred(renderContext, handle);
+}
+
+void SK::Renderer::destroyTextureDeferred(RenderContext* renderContext, TextureHandle handle)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->destroyTextureDeferred != nullptr);
+
+	renderContext->api->destroyTextureDeferred(renderContext, handle);
+}
+
 const SK::Renderer::TextureHandle SK::Renderer::getSwapchainImageHandle(RenderContext* renderContext)
 {
 	assert(renderContext != nullptr);
@@ -189,6 +234,15 @@ void SK::Renderer::executeFrameGraphBarriers(RenderContext* renderContext, const
 	assert(renderContext->api->executeFrameGraphBarriers != nullptr);
 
 	renderContext->api->executeFrameGraphBarriers(renderContext, fg, barriers);
+}
+
+void SK::Renderer::forceFlushFrameDeletionQueues(RenderContext* renderContext)
+{
+	assert(renderContext);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->forceFlushFrameDeletionQueues != nullptr);
+
+	renderContext->api->forceFlushFrameDeletionQueues(renderContext);
 }
 
 void SK::Renderer::beginRendering(RenderContext* renderContext, const TextureHandle* drawImage, const ClearValue* drawImageClearValue, const TextureHandle* depthImage, const ClearValue* depthImageClearValue)

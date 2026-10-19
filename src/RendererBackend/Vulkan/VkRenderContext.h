@@ -37,6 +37,13 @@ namespace SK::VkRendererBackend
 		const char* debugName = nullptr;
 	};
 
+	struct TransientMemoryPool
+	{
+		VmaAllocation allocation = VK_NULL_HANDLE;
+		size_t capacity;
+		uint32_t memoryTypeBits;
+	};
+
 	/*
 		VkRenderContext provides a context for the backend. The engine frontend (RenderContext) will use the functionality provided by the backend via VkRenderContext bridge.
 	*/
@@ -52,6 +59,17 @@ namespace SK::VkRendererBackend
 
 		std::vector<BufferRecord> buffers;
 		std::vector<TextureRecord> textures;
+
+		// Keeping a free list to support efficient deletion of resources.
+		std::vector<uint32_t> bufferFreeList;
+		std::vector<uint32_t> textureFreeList;
+
+		/*
+			 Single backing allocation shared by every transient resource this
+			 frame. Grown (never shrunk); a replaced allocation is freed through
+			 the backend's existing per-frame deletion queue.
+		*/
+		TransientMemoryPool transientPool;
 
 		/*
 			Backend owned images that are handled internally by the backend. VkRenderContext will also create a record and store handles for them and expose them via RenderContext but won't allocate or destroy them.

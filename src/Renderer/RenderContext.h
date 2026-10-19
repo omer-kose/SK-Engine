@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <variant>
 
 namespace SK::Renderer
 {
@@ -407,6 +408,26 @@ namespace SK::Renderer
 		bool mipMapped = false;
 	};
 
+	struct TransientResourceRequest
+	{
+		uint32_t frameGraphResourceIndex;
+		std::variant<BufferDesc, TextureDesc> desc;
+		uint32_t firstUse;
+		uint32_t lastUse;
+	};
+
+	struct TransientPlacement
+	{
+		uint32_t frameGraphResourceIndex;
+		size_t offset;
+	};
+
+	struct TransientPlan
+	{
+		std::vector<TransientPlacement> placements;
+		size_t totalSize = 0;
+	};
+
 	struct RenderContext;
 
 	struct RenderContextAPI
@@ -448,12 +469,20 @@ namespace SK::Renderer
 		const BufferDesc& (*getBufferDesc)(RenderContext* renderContext, const BufferHandle& handle);
 		const TextureDesc& (*getTextureDesc)(RenderContext* renderContext, const TextureHandle& handle);
 
+		const TransientPlan (*planTransientMemory)(RenderContext* renderContext, const std::vector<TransientResourceRequest>& requests);
+		const BufferHandle (*createPlacedBuffer)(RenderContext* renderContext, const BufferDesc& desc, size_t offset);
+		const TextureHandle (*createPlacedTexture)(RenderContext* renderContext, const TextureDesc& desc, size_t offset);
+		void (*destroyBufferDeferred)(RenderContext* renderContext, BufferHandle handle);
+		void (*destroyTextureDeferred)(RenderContext* renderContext, TextureHandle handle);
+
 		const TextureHandle (*getSwapchainImageHandle)(RenderContext* renderContext);
 		const TextureHandle (*getMainDrawImageHandle)(RenderContext* renderContext);
 		const TextureHandle (*getMainDepthImageHandle)(RenderContext* renderContext);
 		void (*updateBackendInternalImageInfos)(RenderContext* renderContext);
 
 		void (*executeFrameGraphBarriers)(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);
+
+		void (*forceFlushFrameDeletionQueues)(RenderContext* renderContext);
 	};
 
 	// Render Context packs up data (state) and functionality of the Graphics API backend. It provides functionality and hides the backend details.
@@ -501,10 +530,19 @@ namespace SK::Renderer
 	const BufferDesc& getBufferDesc (RenderContext* renderContext, const BufferHandle& handle);
 	const TextureDesc& getTextureDesc (RenderContext* renderContext, const TextureHandle& handle);
 
+	const TransientPlan planTransientMemory(RenderContext* renderContext, const std::vector<TransientResourceRequest>& requests);
+	const BufferHandle createPlacedBuffer(RenderContext* renderContext, const BufferDesc& desc, size_t offset);
+	const TextureHandle createPlacedTexture(RenderContext* renderContext, const TextureDesc& desc, size_t offset);
+	// Submits a deferred resource destruction request into the frame deletion queue of the backend. 
+	void destroyBufferDeferred(RenderContext* renderContext, BufferHandle handle);
+	void destroyTextureDeferred(RenderContext* renderContext, TextureHandle handle);
+
 	const TextureHandle getSwapchainImageHandle(RenderContext* renderContext);
 	const TextureHandle getMainDrawImageHandle(RenderContext* renderContext);
 	const TextureHandle getMainDepthImageHandle(RenderContext* renderContext);
 	void updateBackendInternalImageInfos(RenderContext* renderContext);
 
 	void executeFrameGraphBarriers(RenderContext* renderContext, const SK::Renderer::FrameGraph& fg, const std::vector<SK::Renderer::FrameGraphBarrier>& barriers);
+
+	void forceFlushFrameDeletionQueues(RenderContext* renderContext);
 }

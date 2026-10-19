@@ -216,6 +216,9 @@ int main(int argc, char* argv[])
     // Make sure that GPU finished executing every command before shutting down the systems.
     vkDeviceWaitIdle(vkRendererBackend.device);
 
+    // Need to force flush to make sure that the transient resources are cleaned up before cleaning up the containers in backend render context.
+    SK::Renderer::forceFlushFrameDeletionQueues(&renderContext);
+
     SK::VkRendererBackend::clearVkRenderContext(&vkRenderContext);
     SK::VkRendererBackend::clearSceneResources(&vkRendererBackend, &vkSceneResources);
     

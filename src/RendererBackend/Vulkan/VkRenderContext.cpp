@@ -15,10 +15,39 @@
 
 #include <functional>
 #include <string>
+#include <algorithm>
 
 static SK::VkRendererBackend::VkRenderContext* fetchVkRenderContext(SK::Renderer::RenderContext* renderContext)
 {
 	return static_cast<SK::VkRendererBackend::VkRenderContext*>(renderContext->backend);
+}
+
+static uint32_t acquireTextureSlot(SK::VkRendererBackend::VkRenderContext* vkRenderContext)
+{
+	if (!vkRenderContext->textureFreeList.empty())
+	{
+		const uint32_t index = vkRenderContext->textureFreeList.back();
+		vkRenderContext->textureFreeList.pop_back();
+		return index;
+	}
+
+	const uint32_t index = static_cast<uint32_t>(vkRenderContext->textures.size());
+	vkRenderContext->textures.push_back({});
+	return index;
+}
+
+static uint32_t acquireBufferSlot(SK::VkRendererBackend::VkRenderContext* vkRenderContext)
+{
+	if (!vkRenderContext->bufferFreeList.empty())
+	{
+		const uint32_t index = vkRenderContext->bufferFreeList.back();
+		vkRenderContext->bufferFreeList.pop_back();
+		return index;
+	}
+
+	const uint32_t index = static_cast<uint32_t>(vkRenderContext->buffers.size());
+	vkRenderContext->buffers.push_back({});
+	return index;
 }
 
 static VkShaderStageFlagBits toVkShaderStageFlagBits(SK::Renderer::ShaderStageFlagBits stage)
@@ -958,6 +987,29 @@ static constexpr VkAccessFlags2 WRITE_ACCESS_MASK =
 	VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
 	VK_ACCESS_2_TRANSFER_WRITE_BIT;
 
+static VkPipelineStageFlagBits2 toVkPipelineStageFlags(SK::Renderer::ShaderStageFlags stages)
+{
+	VkPipelineStageFlags2 vkStages = 0;
+
+	if ((stages & SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::VertexShader)) != 0)
+	{
+		vkStages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+	}
+
+	if ((stages & SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::FragmentShader)) != 0)
+	{
+		vkStages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	}
+
+	if ((stages & SK::Renderer::toShaderStageFlags(SK::Renderer::ShaderStageFlagBits::ComputeShader)) != 0)
+	{
+		vkStages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	}
+
+	assert(vkStages != 0 && "Given shader stage input does not match with any of the Vulkan pipeline stages.");
+	return vkStages;
+}
+
 static bool isDepthFormat(const SK::Renderer::TextureDesc desc)
 {
 	return toVkFormat(desc.format) == VK_FORMAT_D32_SFLOAT;
@@ -996,18 +1048,18 @@ static StateSync lowerState(
 					 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 
 		case State::ShaderRead:
-			return { toVkShaderStageFlags(shaderStages),
+			return { toVkPipelineStageFlags(shaderStages),
 					 isTexture ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 					 !depthFormat ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL };
 
 		case State::StorageRead:
-			return { toVkShaderStageFlags(shaderStages), VK_ACCESS_2_SHADER_STORAGE_READ_BIT, VK_IMAGE_LAYOUT_GENERAL };
+			return { toVkPipelineStageFlags(shaderStages), VK_ACCESS_2_SHADER_STORAGE_READ_BIT, VK_IMAGE_LAYOUT_GENERAL };
 
 		case State::StorageWrite:
-			return { toVkShaderStageFlags(shaderStages), VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL };
+			return { toVkPipelineStageFlags(shaderStages), VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL };
 
 		case State::StorageReadWrite:
-			return { toVkShaderStageFlags(shaderStages),
+			return { toVkPipelineStageFlags(shaderStages),
 					 VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 					 VK_IMAGE_LAYOUT_GENERAL };
 
@@ -1024,7 +1076,7 @@ static StateSync lowerState(
 			return { VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT, VK_ACCESS_2_INDEX_READ_BIT, {} };
 
 		case State::UniformBuffer:
-			return { toVkShaderStageFlags(shaderStages), VK_ACCESS_2_UNIFORM_READ_BIT, {} };
+			return { toVkPipelineStageFlags(shaderStages), VK_ACCESS_2_UNIFORM_READ_BIT, {} };
 
 		case State::IndirectBuffer:
 			return { VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT, {} };
@@ -1132,7 +1184,373 @@ static void executeFrameGraphBarriers_(SK::Renderer::RenderContext *renderContex
 	vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-static void registerBackendInternalImages_(SK::VkRendererBackend::VkRenderContext* vkRenderContext)
+static size_t alignUp(size_t value, size_t alignment)
+{
+	assert(alignment != 0 && (alignment & (alignment - 1)) == 0 && "Alignment must be a power of two.");
+
+	return (value + alignment - 1) & ~(alignment - 1);
+}
+
+struct Slot
+{
+	size_t offset;
+	size_t size;
+	uint32_t freeAtOrderIndex;
+};
+
+struct GroupEntry
+{
+	size_t requestIndex;
+	uint32_t firstUse;
+	uint32_t lastUse;
+};
+
+/*
+	Greedy first-fit interval scheduling over one linearity-homogeneous
+	group (all buffers, or all optimal-tiling textures).
+*/
+static std::vector<SK::Renderer::TransientPlacement> assignSlots(
+	std::vector<GroupEntry> group,
+	const std::vector<SK::Renderer::TransientResourceRequest>& requests,
+	const std::vector<VkMemoryRequirements> vkMemReqs,
+	size_t* outSize,
+	uint32_t* outMemoryTypeBits
+)
+{
+	std::sort(group.begin(), group.end(), [](const GroupEntry& a, const GroupEntry& b) {
+		return a.firstUse < b.firstUse;
+	});
+
+	std::vector<Slot> freeSlots;
+	std::vector<Slot> liveSlots;
+	
+	size_t peak = 0;
+	uint32_t typeBits = 0xFFFFFFFFu;
+
+	std::vector<SK::Renderer::TransientPlacement> placements;
+	placements.reserve(group.size());
+
+	for (const GroupEntry& ge : group)
+	{
+		const VkMemoryRequirements& mr = vkMemReqs[ge.requestIndex];
+		typeBits &= mr.memoryTypeBits;
+
+		// Free the live slots if they can be made available for this entry.
+		for (size_t i = 0; i < liveSlots.size();)
+		{
+			if (liveSlots[i].freeAtOrderIndex < ge.firstUse)
+			{
+				freeSlots.push_back(liveSlots[i]);
+				liveSlots[i] = liveSlots.back();
+				liveSlots.pop_back();
+			}
+			else
+			{
+				++i;
+			}
+		}
+
+		int chosenIndex = -1;
+		size_t chosenOffset = 0;
+
+		// Find the best smallest fit among free slots to minimize memory fragmentation.
+		for (size_t i = 0; i < freeSlots.size(); ++i)
+		{
+			const size_t alignedOffset = alignUp(freeSlots[i].offset, mr.alignment);
+			const size_t slotEnd = freeSlots[i].offset = freeSlots[i].size;
+
+			if (alignedOffset + mr.size <= slotEnd)
+			{
+				if (chosenIndex == -1 || freeSlots[i].size < freeSlots[chosenIndex].size)
+				{
+					chosenIndex = i;
+					chosenOffset = alignedOffset;
+				}
+			}
+		}
+
+		size_t offset;
+		if (chosenIndex != -1)
+		{
+			// The chosen free slot is now in use and not free anymore.
+			offset = chosenOffset;
+			freeSlots[chosenIndex] = freeSlots.back();
+			freeSlots.pop_back();
+		}
+		else
+		{
+			offset = alignUp(peak, mr.alignment);
+			peak = offset + mr.size;
+		}
+
+		liveSlots.push_back({ offset, mr.size, ge.lastUse });
+		placements.push_back({ requests[ge.requestIndex].frameGraphResourceIndex, offset });
+	}
+
+	*outSize = peak;
+	*outMemoryTypeBits = typeBits;
+	return placements;
+}
+
+static VkMemoryRequirements toVkBufferMemReq(VkDevice device, const SK::Renderer::BufferDesc& desc)
+{
+	VkBufferCreateInfo bufInfo{
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = desc.size,
+		.usage = toVkBufferUsageFlags(desc.usage) | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+	};
+
+	VkDeviceBufferMemoryRequirements query{ .sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS, .pCreateInfo = &bufInfo };
+	VkMemoryRequirements2 out{ .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
+	vkGetDeviceBufferMemoryRequirements(device, &query, &out);
+
+	return out.memoryRequirements;
+}
+
+static VkMemoryRequirements toVkImageMemReq(VkDevice device, const SK::Renderer::TextureDesc& desc)
+{
+	VkImageCreateInfo imgInfo = SK::VkInit::imageCreateInfo(toVkFormat(desc.format), toVkImageUsageFlags(desc.usage), toVkExtent3D(desc.imageExtent));
+
+	VkDeviceImageMemoryRequirements query{ .sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS, .pCreateInfo = &imgInfo };
+	VkMemoryRequirements2 out{ .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
+	vkGetDeviceImageMemoryRequirements(device, &query, &out);
+
+	return out.memoryRequirements;
+}
+
+static void reserveTransientMemory(SK::VkRendererBackend::VkRenderContext* vkRenderContext, size_t size, uint32_t memoryTypeBits)
+{
+	SK::VkRendererBackend::State* backend = vkRenderContext->vkRendererBackend;
+	SK::VkRendererBackend::TransientMemoryPool& pool = vkRenderContext->transientPool;
+
+	const bool sizeOk = size <= pool.capacity;
+	const bool typeOk = pool.allocation != VK_NULL_HANDLE && (memoryTypeBits & pool.memoryTypeBits) != 0;
+
+	if (sizeOk && typeOk)
+	{
+		return;
+	}
+
+	VmaAllocation oldAllocation = pool.allocation;
+
+	VmaAllocationCreateInfo allocCI{};
+	allocCI.flags = VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT;
+	allocCI.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+	VkMemoryRequirements dummyReq{};
+	dummyReq.size = size;
+	dummyReq.alignment = 256; // some conservative dummy alignment. Each resource will be placed wrt its own alignment while assigning slots.
+	dummyReq.memoryTypeBits = memoryTypeBits;
+
+	VmaAllocationInfo outInfo{};
+	VK_CHECK(vmaAllocateMemory(backend->vmaAllocator, &dummyReq, &allocCI, &pool.allocation, &outInfo));
+
+	pool.capacity = size;
+	pool.memoryTypeBits = (1u << outInfo.memoryType);
+
+	if (oldAllocation != VK_NULL_HANDLE)
+	{
+		SK::VkRendererBackend::FrameData& currentFrameData = SK::VkRendererBackend::getCurrentFrameData(backend);
+		currentFrameData.deletionQueue.pushFunction([backend, oldAllocation]() { vmaFreeMemory(backend->vmaAllocator, oldAllocation); });
+	}
+}
+
+static const SK::Renderer::TransientPlan planTransientMemory_(SK::Renderer::RenderContext* renderContext, const std::vector<SK::Renderer::TransientResourceRequest>& requests)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	std::vector<VkMemoryRequirements> vkMemReqs(requests.size());
+	std::vector<GroupEntry> bufferGroup;
+	std::vector<GroupEntry> textureGroup;
+
+	for (size_t i = 0; i < requests.size(); ++i)
+	{
+		const SK::Renderer::TransientResourceRequest& req = requests[i];
+
+		if (std::holds_alternative<SK::Renderer::BufferDesc>(req.desc))
+		{
+			vkMemReqs[i] = toVkBufferMemReq(vkRendererBackend->device, std::get<SK::Renderer::BufferDesc>(req.desc));
+			bufferGroup.push_back({ i, req.firstUse, req.lastUse });
+		}
+		else
+		{
+			vkMemReqs[i] = toVkImageMemReq(vkRendererBackend->device, std::get<SK::Renderer::TextureDesc>(req.desc));
+			textureGroup.push_back({ i, req.firstUse, req.lastUse });
+		}
+	}
+
+	/*
+		Buffers (linear) and optimal-tiling textures (non-linear) must
+		not be packed within bufferImageGranularity of each other in the same
+		VkDeviceMemory, even without aliasing intent. This holds purely from
+		adjacency. Resources within each group share a linearity class, so
+		only the single boundary between the two groups needs padding; the
+		backing allocation stays unified.
+		
+		So, the transient allocation looks like
+		LinearMemory (BufferRegion)|BufferImageGranularity|NonLinearMemory (TextureRegion) 
+	*/
+	size_t bufferRegionSize = 0, textureRegionSize = 0;
+	uint32_t bufferTypeBits = 0xFFFFFFFFu, textureTypeBits = 0xFFFFFFFFu;
+
+	std::vector<SK::Renderer::TransientPlacement> bufferPlacements = assignSlots(bufferGroup, requests, vkMemReqs, &bufferRegionSize, &bufferTypeBits);
+	std::vector<SK::Renderer::TransientPlacement> texturePlacements = assignSlots(textureGroup, requests, vkMemReqs, &textureRegionSize, &textureTypeBits);
+
+	const uint32_t memoryTypeBits = bufferTypeBits & textureTypeBits;
+	assert(memoryTypeBits != 0 && "No common Vulkan memory type across this frame's transient resources.");
+
+	VkPhysicalDeviceProperties physicalDeviceProperties{};
+	vkGetPhysicalDeviceProperties(vkRendererBackend->chosenGPU, &physicalDeviceProperties);
+	size_t bufferImageGranularity = physicalDeviceProperties.limits.bufferImageGranularity;
+
+	size_t granularity = std::max<size_t>(bufferImageGranularity, 1);
+	size_t textureRegionBase = alignUp(bufferRegionSize, granularity);
+	size_t totalSize = textureRegionBase + textureRegionSize;
+
+	reserveTransientMemory(vkRenderContext, totalSize, memoryTypeBits);
+
+	SK::Renderer::TransientPlan plan{};
+	plan.totalSize = totalSize;
+	plan.placements.reserve(bufferPlacements.size() + texturePlacements.size());
+
+	for (const SK::Renderer::TransientPlacement& p : bufferPlacements)
+	{
+		plan.placements.push_back({ p.frameGraphResourceIndex, p.offset });
+	}
+
+	for (const SK::Renderer::TransientPlacement& p : texturePlacements)
+	{
+		plan.placements.push_back({ p.frameGraphResourceIndex, textureRegionBase + p.offset });
+	}
+
+	return plan;
+}
+
+static const SK::Renderer::BufferHandle createPlacedBuffer_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::BufferDesc& desc, size_t offset)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	VkBufferCreateInfo bufInfo{
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = desc.size,
+		.usage = toVkBufferUsageFlags(desc.usage) | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+	};
+
+	VkBuffer buffer;
+	VK_CHECK(vkCreateBuffer(vkRendererBackend->device, &bufInfo, nullptr, &buffer));
+
+#ifndef NDEBUG
+	VkMemoryRequirements memReq;
+	vkGetBufferMemoryRequirements(vkRendererBackend->device, buffer, &memReq);
+	assert(offset + memReq.size <= vkRenderContext->transientPool.capacity && "Transient pool was not reserved large enough for this placement.");
+#endif
+
+	VK_CHECK(vmaBindBufferMemory2(vkRendererBackend->vmaAllocator, vkRenderContext->transientPool.allocation, offset, buffer, nullptr));
+
+	SK::VkRendererBackend::BufferRecord record{};
+	record.buffer.buffer = buffer;
+	record.buffer.allocation = VK_NULL_HANDLE; // allocation belongs to the transient pool.
+	record.debugName = desc.debugName;
+	record.desc = desc;
+	record.ownsMemory = false;
+
+	VkBufferDeviceAddressInfo addrInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
+	record.buffer.address = vkGetBufferDeviceAddress(vkRendererBackend->device, &addrInfo);
+
+	const uint32_t index = acquireBufferSlot(vkRenderContext);
+	vkRenderContext->buffers[index] = record;
+
+	return SK::Renderer::BufferHandle{ index };
+}
+
+static const SK::Renderer::TextureHandle createPlacedTexture_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::TextureDesc& desc, size_t offset)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	VkImageCreateInfo imgInfo = SK::VkInit::imageCreateInfo(toVkFormat(desc.format), toVkImageUsageFlags(desc.usage), toVkExtent3D(desc.imageExtent));
+	VkImage image;
+	VK_CHECK(vkCreateImage(vkRendererBackend->device, &imgInfo, nullptr, &image));
+
+#ifndef NDEBUG
+	VkMemoryRequirements memReq;
+	vkGetImageMemoryRequirements(vkRendererBackend->device, image, &memReq);
+	assert(offset + memReq.size <= vkRenderContext->transientPool.capacity && "Transient pool was not reserved large enough for this placement.");
+#endif
+
+	VK_CHECK(vmaBindImageMemory2(vkRendererBackend->vmaAllocator, vkRenderContext->transientPool.allocation, offset, image, nullptr));
+
+	const bool depthFormat = isDepthFormat(desc);
+	VkImageViewCreateInfo viewInfo = SK::VkInit::imageViewCreateInfo(toVkFormat(desc.format), image, !depthFormat ? VK_IMAGE_ASPECT_COLOR_BIT : VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	VkImageView view;
+	VK_CHECK(vkCreateImageView(vkRendererBackend->device, &viewInfo, nullptr, &view));
+
+	SK::VkRendererBackend::TextureRecord record{};
+	record.image.image = image;
+	record.image.imageView = view;
+	record.image.allocation = VK_NULL_HANDLE; // allocation belongs to the transient pool.
+	record.image.imageFormat = toVkFormat(desc.format);
+	record.image.imageExtent = toVkExtent3D(desc.imageExtent);
+	record.debugName = desc.debugName;
+	record.desc = desc;
+	record.ownsMemory = false;
+
+	const uint32_t index = acquireTextureSlot(vkRenderContext);
+	vkRenderContext->textures[index] = record;
+
+	return SK::Renderer::TextureHandle{ index };
+}
+
+static void destroyBufferDeferred_(SK::Renderer::RenderContext* renderContext, SK::Renderer::BufferHandle handle)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+	SK::VkRendererBackend::FrameData& currentFrame = SK::VkRendererBackend::getCurrentFrameData(vkRendererBackend);
+
+	currentFrame.deletionQueue.pushFunction([vkRenderContext, vkRendererBackend, handle]() {
+		SK::VkRendererBackend::BufferRecord& record = vkRenderContext->buffers[handle.id];
+		assert(record.ownsMemory == false && "destroyBufferDeferred called on a non-placed buffer.");
+
+		vkDestroyBuffer(vkRendererBackend->device, record.buffer.buffer, nullptr);
+
+		record = {};
+		vkRenderContext->bufferFreeList.push_back(handle.id);
+	});
+}
+
+static void destroyTextureDeferred_(SK::Renderer::RenderContext* renderContext, SK::Renderer::TextureHandle handle)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+	SK::VkRendererBackend::FrameData& currentFrame = SK::VkRendererBackend::getCurrentFrameData(vkRendererBackend);
+
+	currentFrame.deletionQueue.pushFunction([vkRenderContext, vkRendererBackend, handle]() {
+		SK::VkRendererBackend::TextureRecord& record = vkRenderContext->textures[handle.id];
+		assert(record.ownsMemory == false && "destroyTextureDeferred called on a non-placed texture.");
+
+		vkDestroyImageView(vkRendererBackend->device, record.image.imageView, nullptr);
+		vkDestroyImage(vkRendererBackend->device, record.image.image, nullptr);
+
+		record = {};
+		vkRenderContext->textureFreeList.push_back(handle.id);
+	});
+}
+
+static void forceFlushFrameDeletionQueues_(SK::Renderer::RenderContext* renderContext)
+{
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
+
+	for (int i = 0; i < SK::VkRendererBackend::NUM_FRAMES_IN_FLIGHT; ++i)
+	{
+		vkRendererBackend->frames[i].deletionQueue.flush();
+	}
+}
+
+static void registerBackendInternalImages(SK::VkRendererBackend::VkRenderContext* vkRenderContext)
 {
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 
@@ -1189,7 +1607,7 @@ void SK::VkRendererBackend::initVkRenderContext(VkRenderContext* vkRenderContext
 	vkRenderContext->buffers.clear();
 	vkRenderContext->textures.clear();
 
-	registerBackendInternalImages_(vkRenderContext);
+	registerBackendInternalImages(vkRenderContext);
 }
 
 SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderContext* vkRenderContext)
@@ -1221,11 +1639,17 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.createTexture = createTexture_,
 		.getBufferDesc = getBufferDesc_,
 		.getTextureDesc = getTextureDesc_,
+		.planTransientMemory = planTransientMemory_,
+		.createPlacedBuffer = createPlacedBuffer_,
+		.createPlacedTexture = createPlacedTexture_,
+		.destroyBufferDeferred = destroyBufferDeferred_,
+		.destroyTextureDeferred = destroyTextureDeferred_,
 		.getSwapchainImageHandle = getSwapchainImageHandle_,
 		.getMainDrawImageHandle = getMainDrawImageHandle_,
 		.getMainDepthImageHandle = getMainDepthImageHandle_,
 		.updateBackendInternalImageInfos = updateBackendInternalImageInfos_,
-		.executeFrameGraphBarriers = executeFrameGraphBarriers_
+		.executeFrameGraphBarriers = executeFrameGraphBarriers_,
+		.forceFlushFrameDeletionQueues = forceFlushFrameDeletionQueues_
 	};
 
 	SK::Renderer::RenderContext renderContext{};
@@ -1254,6 +1678,11 @@ void SK::VkRendererBackend::clearVkRenderContext(VkRenderContext* vkRenderContex
 				SK::VkRendererBackend::destroyImage(vkRenderContext->vkRendererBackend, vkRenderContext->textures[i].image);
 			}
 		}
+	}
+
+	if (vkRenderContext->transientPool.allocation != VK_NULL_HANDLE)
+	{
+		vmaFreeMemory(vkRenderContext->vkRendererBackend->vmaAllocator, vkRenderContext->transientPool.allocation);
 	}
 
 	vkRenderContext->vkRendererBackend = nullptr;

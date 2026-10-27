@@ -110,7 +110,6 @@ void SK::VkRendererBackend::init(State* vkRendererBackend, struct SDL_Window* wi
     initDefaultData(vkRendererBackend);
 
     initGlobalSceneBuffer(vkRendererBackend);
-    //initGlobalSceneBuffer2(vkRendererBackend);
 
     // everything went fine
     vkRendererBackend->isInitialized = true;
@@ -202,7 +201,8 @@ bool SK::VkRendererBackend::beginFrame(State* vkRendererBackend)
     // Start the command buffer recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    // Bind the descriptor heaps once per-frame.
+    // Bind and upload the descriptor heaps once per-frame.
+    SK::VkRendererBackend::uploadDescriptorHeap(vkRendererBackend, cmd, &vkRendererBackend->descriptorHeap);
     SK::VkRendererBackend::bindDescriptorHeap(vkRendererBackend, cmd, &vkRendererBackend->descriptorHeap);
 
     // Frame has begun successfully, fill in per-frame transient state in the renderer backend state
@@ -222,6 +222,9 @@ void SK::VkRendererBackend::endFrame(State* vkRendererBackend)
 
     // Finalize the command buffer
     VK_CHECK(vkEndCommandBuffer(cmd));
+
+    // Update the descriptor heap staging buffers.
+    SK::VkRendererBackend::updateDescriptorHeap(vkRendererBackend, &vkRendererBackend->descriptorHeap);
 
     // Prepare the submission
     // GPU will wait on the swapchainAcquireSemaphore before outputting the final colors. swapchainAcquireSemaphore is set to be signalled in vkAcquireSwapchainImage once the swapchain is done presenting that image.

@@ -19,6 +19,9 @@
 
 	Per Vulkan spec, the application has control of where the driver’s reserved range ends up. In this implementation, reserved range will be placed at the end of the heap buffer. So, the descriptor blob info start
 	from offset 0.
+
+	Descriptor Heap internally holds 2 buffers inside, one staging and one GPU buffer. Staging buffer is updated on the CPU and at the beginning of every frame, it is uploaded to the GPU. This way, the descriptor reads
+	will be local in the GPU and more efficient.
 */
 
 namespace SK::VkRendererBackend
@@ -83,11 +86,14 @@ namespace SK::VkRendererBackend
 
 	struct DescriptorHeap
 	{
-		AllocatedBuffer resourceHeapBuffer{};
-		AllocatedBuffer samplerHeapBuffer{};
+		AllocatedBuffer resourceHeapBufferStaging{};
+		AllocatedBuffer samplerHeapBufferStaging{};
+
+		AllocatedBuffer resourceHeapBufferGPU{};
+		AllocatedBuffer samplerHeapBufferGPU{};
 			
-		uint8_t* resourceHeapMappedData;
-		uint8_t* samplerHeapMappedData;
+		uint8_t* resourceHeapStagingMappedData;
+		uint8_t* samplerHeapStagingMappedData;
 
 		VkDeviceSize resourceHeapSize = 0;
 		VkDeviceSize samplerHeapSize = 0;
@@ -119,6 +125,8 @@ namespace SK::VkRendererBackend
 
 	void initDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap, const DescriptorHeapDesc& desc);
 	void destroyDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap);
+	void updateDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap);
+	void uploadDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, DescriptorHeap* heap);
 	void bindDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, const DescriptorHeap* heap);
 	// Allocate functions allocates a slot in the heap and returns a handle. The descriptor info is then written with write functions with that handle to that heap slot.
 	ResourceDescriptorHandle allocateResourceDescriptor(DescriptorHeap* heap, ResourceDescriptorKind kind);

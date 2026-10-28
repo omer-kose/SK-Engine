@@ -91,10 +91,8 @@ void SK::VkRendererBackend::buildGPUAssets(State* vkRendererBackend, SK::Asset::
             gpuTexture.ownsImage = true;
 
             // Create the image descriptor
-            gpuTexture.imageDescriptor = SK::VkRendererBackend::allocateResourceDescriptor(&vkRendererBackend->descriptorHeap, SK::VkRendererBackend::ResourceDescriptorKind::SampledImage);
-            SK::VkRendererBackend::writeSampledImageDescriptor(
-                vkRendererBackend,
-                &vkRendererBackend->descriptorHeap,
+            gpuTexture.imageDescriptor = vkRendererBackend->descriptorHeap.allocateResourceDescriptor(SK::VkRendererBackend::ResourceDescriptorKind::SampledImage);
+            vkRendererBackend->descriptorHeap.writeSampledImageDescriptor(
                 gpuTexture.imageDescriptor,
                 SK::VkRendererBackend::createImageViewInfo(vkRendererBackend, gpuTexture.image),
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // sampled image
@@ -107,10 +105,8 @@ void SK::VkRendererBackend::buildGPUAssets(State* vkRendererBackend, SK::Asset::
             gpuTexture.ownsImage = false;
 
             // Still create an image descriptor (leads to duplicate descriptors if more than one errorenous textures are loaded but it is fine as errorenous textures are there to be cleaned not used in a running program).
-            gpuTexture.imageDescriptor = SK::VkRendererBackend::allocateResourceDescriptor(&vkRendererBackend->descriptorHeap, SK::VkRendererBackend::ResourceDescriptorKind::SampledImage);
-            SK::VkRendererBackend::writeSampledImageDescriptor(
-                vkRendererBackend,
-                &vkRendererBackend->descriptorHeap,
+            gpuTexture.imageDescriptor = vkRendererBackend->descriptorHeap.allocateResourceDescriptor(SK::VkRendererBackend::ResourceDescriptorKind::SampledImage);
+            vkRendererBackend->descriptorHeap.writeSampledImageDescriptor(
                 gpuTexture.imageDescriptor,
                 SK::VkRendererBackend::createImageViewInfo(vkRendererBackend, gpuTexture.image),
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // sampled image

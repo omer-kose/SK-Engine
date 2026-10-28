@@ -57,11 +57,11 @@ namespace SK::VkRendererBackend
 		}
 	}
 
-	void initDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap, const DescriptorHeapDesc& desc)
+	void DescriptorHeap::init(State* vkRendererBackend, const DescriptorHeapDesc& desc)
 	{
 		assert(vkRendererBackend);
-		assert(heap);
-		assert(!heap->initialized);
+		assert(this);
+		assert(!initialized);
 
 		VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptorHeapProperties{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,
@@ -73,72 +73,72 @@ namespace SK::VkRendererBackend
 			.pNext = &descriptorHeapProperties
 		};
 
-		heap->maxResourceDescriptors = desc.maxResourceDescriptors;
-		heap->maxSamplerDescriptors = desc.maxSamplerDescriptors;
+		maxResourceDescriptors = desc.maxResourceDescriptors;
+		maxSamplerDescriptors = desc.maxSamplerDescriptors;
 
 		vkGetPhysicalDeviceProperties2(vkRendererBackend->chosenGPU, &properties2);
 
-		heap->bufferDescriptorSize = descriptorHeapProperties.bufferDescriptorSize;
-		heap->imageDescriptorSize = descriptorHeapProperties.imageDescriptorSize;
+		bufferDescriptorSize = descriptorHeapProperties.bufferDescriptorSize;
+		imageDescriptorSize = descriptorHeapProperties.imageDescriptorSize;
 
-		heap->samplerDescriptorSize = descriptorHeapProperties.samplerDescriptorSize;
+		samplerDescriptorSize = descriptorHeapProperties.samplerDescriptorSize;
 
-		const VkDeviceSize resourceDescriptorSize = std::max(heap->bufferDescriptorSize, heap->imageDescriptorSize);
+		const VkDeviceSize resourceDescriptorSize = std::max(bufferDescriptorSize, imageDescriptorSize);
 		const VkDeviceSize resourceDescriptorAlignment = std::max(descriptorHeapProperties.bufferDescriptorAlignment, descriptorHeapProperties.imageDescriptorAlignment);
-		heap->resourceDescriptorStride = alignUp(resourceDescriptorSize, resourceDescriptorAlignment);
-		heap->samplerDescriptorStride = alignUp(heap->samplerDescriptorSize, descriptorHeapProperties.samplerDescriptorAlignment);
+		resourceDescriptorStride = alignUp(resourceDescriptorSize, resourceDescriptorAlignment);
+		samplerDescriptorStride = alignUp(samplerDescriptorSize, descriptorHeapProperties.samplerDescriptorAlignment);
 
-		heap->resourceHeapSize = alignUp(heap->maxResourceDescriptors * heap->resourceDescriptorStride + descriptorHeapProperties.minResourceHeapReservedRange, resourceDescriptorAlignment);
-		heap->samplerHeapSize = alignUp(heap->maxSamplerDescriptors * heap->samplerDescriptorStride + descriptorHeapProperties.minSamplerHeapReservedRange, descriptorHeapProperties.samplerDescriptorAlignment);
+		resourceHeapSize = alignUp(maxResourceDescriptors * resourceDescriptorStride + descriptorHeapProperties.minResourceHeapReservedRange, resourceDescriptorAlignment);
+		samplerHeapSize = alignUp(maxSamplerDescriptors * samplerDescriptorStride + descriptorHeapProperties.minSamplerHeapReservedRange, descriptorHeapProperties.samplerDescriptorAlignment);
 
-		heap->resourceReservedRangeOffset = heap->resourceHeapSize - descriptorHeapProperties.minResourceHeapReservedRange;
-		heap->resourceReservedRangeSize = descriptorHeapProperties.minResourceHeapReservedRange;
-		heap->samplerReservedRangeOffset = heap->samplerHeapSize - descriptorHeapProperties.minSamplerHeapReservedRange;
-		heap->samplerReservedRangeSize = descriptorHeapProperties.minSamplerHeapReservedRange;
+		resourceReservedRangeOffset = resourceHeapSize - descriptorHeapProperties.minResourceHeapReservedRange;
+		resourceReservedRangeSize = descriptorHeapProperties.minResourceHeapReservedRange;
+		samplerReservedRangeOffset = samplerHeapSize - descriptorHeapProperties.minSamplerHeapReservedRange;
+		samplerReservedRangeSize = descriptorHeapProperties.minSamplerHeapReservedRange;
 
-		heap->resourceHeapBufferStaging = createBuffer(vkRendererBackend, heap->resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-		heap->resourceHeapStagingMappedData = static_cast<uint8_t*>(heap->resourceHeapBufferStaging.allocInfo.pMappedData);
-		heap->resourceHeapBufferGPU = createBuffer(vkRendererBackend, heap->resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+		resourceHeapBufferStaging = createBuffer(vkRendererBackend, resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+		resourceHeapStagingMappedData = static_cast<uint8_t*>(resourceHeapBufferStaging.allocInfo.pMappedData);
+		resourceHeapBufferGPU = createBuffer(vkRendererBackend, resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-		heap->samplerHeapBufferStaging = createBuffer(vkRendererBackend, heap->samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-		heap->samplerHeapStagingMappedData = static_cast<uint8_t*>(heap->samplerHeapBufferStaging.allocInfo.pMappedData);
-		heap->samplerHeapBufferGPU = createBuffer(vkRendererBackend, heap->samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+		samplerHeapBufferStaging = createBuffer(vkRendererBackend, samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+		samplerHeapStagingMappedData = static_cast<uint8_t*>(samplerHeapBufferStaging.allocInfo.pMappedData);
+		samplerHeapBufferGPU = createBuffer(vkRendererBackend, samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
 		s_bufferWrites = {};
 		s_textureWrites = {};
 		s_samplerInfos = {};
 		s_samplerHostAddresses = {};
 
-		heap->initialized = true;
+		initialized = true;
 	}
 
-	void destroyDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap)
+	void DescriptorHeap::destroy(State* vkRendererBackend)
 	{
 		assert(vkRendererBackend);
-		assert(heap);
+		assert(this);
 
-		if (!heap->initialized)
+		if (!initialized)
 		{
 			return;
 		}
 
-		destroyBuffer(vkRendererBackend, heap->resourceHeapBufferStaging);
-		destroyBuffer(vkRendererBackend, heap->resourceHeapBufferGPU);
-		destroyBuffer(vkRendererBackend, heap->samplerHeapBufferStaging);
-		destroyBuffer(vkRendererBackend, heap->samplerHeapBufferGPU);
+		destroyBuffer(vkRendererBackend, resourceHeapBufferStaging);
+		destroyBuffer(vkRendererBackend, resourceHeapBufferGPU);
+		destroyBuffer(vkRendererBackend, samplerHeapBufferStaging);
+		destroyBuffer(vkRendererBackend, samplerHeapBufferGPU);
 
 		s_bufferWrites = {};
 		s_textureWrites = {};
 		s_samplerInfos = {};
 		s_samplerHostAddresses = {};
 
-		*heap = {};
+		*this = {};
 	}
 
 	/*
 		Staging buffers are in the CPU, so updating is done before anything is executed on the GPU. In other words, before staging buffers are uploaded they are guaranteed to be updated safely.
 	*/
-	void updateDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap)
+	void DescriptorHeap::update(State* vkRendererBackend)
 	{
 		// Update the descriptor heap staging buffers with the requested writes.
 		size_t resourceDescriptorCount = s_bufferWrites.size() + s_textureWrites.size();
@@ -204,18 +204,18 @@ namespace SK::VkRendererBackend
 		}
 	}
 
-	void uploadDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, DescriptorHeap* heap)
+	void DescriptorHeap::upload(State* vkRendererBackend, VkCommandBuffer cmd)
 	{
 		assert(vkRendererBackend);
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 
 		// Copy resource and sampler staging buffers to their corresponding GPU buffers.
 		VkBufferCopy copy{ .srcOffset = 0, .dstOffset = 0 };
-		copy.size = heap->resourceHeapSize;
-		vkCmdCopyBuffer(cmd, heap->resourceHeapBufferStaging.buffer, heap->resourceHeapBufferGPU.buffer, 1, &copy);
-		copy.size = heap->samplerHeapSize;
-		vkCmdCopyBuffer(cmd, heap->samplerHeapBufferStaging.buffer, heap->samplerHeapBufferGPU.buffer, 1, &copy);
+		copy.size = resourceHeapSize;
+		vkCmdCopyBuffer(cmd, resourceHeapBufferStaging.buffer, resourceHeapBufferGPU.buffer, 1, &copy);
+		copy.size = samplerHeapSize;
+		vkCmdCopyBuffer(cmd, samplerHeapBufferStaging.buffer, samplerHeapBufferGPU.buffer, 1, &copy);
 
 		// Issue a barrier at the beginning of the frame to synchronize.
 		VkMemoryBarrier2 barrier{
@@ -239,21 +239,21 @@ namespace SK::VkRendererBackend
 		vkCmdPipelineBarrier2(cmd, &dependency);
 	}
 
-	void bindDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, const DescriptorHeap* heap)
+	void DescriptorHeap::bind(State* vkRendererBackend, VkCommandBuffer cmd)
 	{
 		assert(vkRendererBackend);
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 
 		VkBindHeapInfoEXT resourceHeapBindInfo{
 			.sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
 			.pNext = nullptr,
 			.heapRange = VkDeviceAddressRangeEXT{
-				.address = heap->resourceHeapBufferGPU.address,
-				.size = heap->resourceHeapSize
+				.address = resourceHeapBufferGPU.address,
+				.size = resourceHeapSize
 			},
-			.reservedRangeOffset = heap->resourceReservedRangeOffset,
-			.reservedRangeSize = heap->resourceReservedRangeSize
+			.reservedRangeOffset = resourceReservedRangeOffset,
+			.reservedRangeSize = resourceReservedRangeSize
 		};
 
 		vkCmdBindResourceHeapEXT(cmd, &resourceHeapBindInfo);
@@ -262,132 +262,134 @@ namespace SK::VkRendererBackend
 			.sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
 			.pNext = nullptr,
 			.heapRange = VkDeviceAddressRangeEXT{
-				.address = heap->samplerHeapBufferGPU.address,
-				.size = heap->samplerHeapSize
+				.address = samplerHeapBufferGPU.address,
+				.size = samplerHeapSize
 			},
-			.reservedRangeOffset = heap->samplerReservedRangeOffset,
-			.reservedRangeSize = heap->samplerReservedRangeSize
+			.reservedRangeOffset = samplerReservedRangeOffset,
+			.reservedRangeSize = samplerReservedRangeSize
 		};
 
 		vkCmdBindSamplerHeapEXT(cmd, &samplerHeapBindInfo);
 	}
 
-	ResourceDescriptorHandle allocateResourceDescriptor(DescriptorHeap* heap, ResourceDescriptorKind kind)
+	ResourceDescriptorHandle DescriptorHeap::allocateResourceDescriptor(ResourceDescriptorKind kind)
 	{
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 
 		ResourceDescriptorHandle handle{};
 
-		if (heap->resourceFreeList.empty())
+		if (resourceFreeList.empty())
 		{
-			if (heap->nextResourceDescriptor >= heap->maxResourceDescriptors)
+			if (nextResourceDescriptor >= maxResourceDescriptors)
 			{
 				fmt::println("Resource Descriptor Heap is exhausted.");
 				abort();
 			}
 
-			handle.index = heap->nextResourceDescriptor;
+			handle.index = nextResourceDescriptor;
 			handle.kind = kind;
 
-			++heap->nextResourceDescriptor;
+			++nextResourceDescriptor;
 		}
 		else
 		{
 			// Fetch the available slot and give that index to the handle
-			handle.index = heap->resourceFreeList.back();
+			handle.index = resourceFreeList.back();
 			handle.kind = kind;
 
-			heap->resourceFreeList.pop_back();
+			resourceFreeList.pop_back();
 		}
 
 		return handle;
 	}
 
-	void deleteDescriptor(DescriptorHeap* heap, ResourceDescriptorHandle& handle)
+	void DescriptorHeap::deleteDescriptor(ResourceDescriptorHandle& handle)
 	{
 		// Make the index of the handle available in the resource free list
-		heap->resourceFreeList.push_back(handle.index);
+		resourceFreeList.push_back(handle.index);
 
 		// invalidate the handle
 		handle.index = INVALID_RESOURCE_DESCRIPTOR_HANDLE;
 	}
 
-	SamplerDescriptorHandle allocateSamplerDescriptor(DescriptorHeap* heap)
+	SamplerDescriptorHandle DescriptorHeap::allocateSamplerDescriptor()
 	{
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 
 		SamplerDescriptorHandle handle{};
 
-		if (heap->samplerFreeList.empty())
+		if (samplerFreeList.empty())
 		{
-			if (heap->nextSamplerDescriptor >= heap->maxSamplerDescriptors)
+			if (nextSamplerDescriptor >= maxSamplerDescriptors)
 			{
 				fmt::println("Sampler Descriptor Heap is exhausted.");
 				abort();
 			}
 
-			handle.index = heap->nextSamplerDescriptor;
+			handle.index = nextSamplerDescriptor;
 
-			++heap->nextSamplerDescriptor;
+			++nextSamplerDescriptor;
 		}
 		else
 		{
 			// Fetch the available slot and give that index to the handle
-			handle.index = heap->samplerFreeList.back();
+			handle.index = samplerFreeList.back();
 
-			heap->samplerFreeList.pop_back();
+			samplerFreeList.pop_back();
 		}
 
 		return handle;
 	}
 
-	void deleteDescriptor(DescriptorHeap* heap, SamplerDescriptorHandle& handle)
+	void DescriptorHeap::deleteDescriptor(SamplerDescriptorHandle& handle)
 	{
+		assert(this);
+		assert(initialized);
+		assert(isValid(handle));
 		// Make the index of the handle available in the sampler free list
-		heap->samplerFreeList.push_back(handle.index);
+		samplerFreeList.push_back(handle.index);
 
 		// invalidate the handle
 		handle.index = INVALID_SAMPLER_DESCRIPTOR_HANDLE;
 	}
 
-	VkDeviceSize getResourceDescriptorOffset(const DescriptorHeap* heap, ResourceDescriptorHandle handle)
+	VkDeviceSize DescriptorHeap::getResourceDescriptorOffset(ResourceDescriptorHandle handle)
 	{
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 		assert(isValid(handle));
-		assert(handle.index < heap->maxResourceDescriptors);
+		assert(handle.index < maxResourceDescriptors);
 
-		return handle.index * heap->resourceDescriptorStride;
+		return handle.index * resourceDescriptorStride;
 	}
 
-	VkDeviceSize getSamplerDescriptorOffset(const DescriptorHeap* heap, SamplerDescriptorHandle handle)
+	VkDeviceSize DescriptorHeap::getSamplerDescriptorOffset(SamplerDescriptorHandle handle)
 	{
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 		assert(isValid(handle));
-		assert(handle.index < heap->maxSamplerDescriptors);
+		assert(handle.index < maxSamplerDescriptors);
 
-		return handle.index * heap->samplerDescriptorStride;
+		return handle.index * samplerDescriptorStride;
 	}
 
-	void writeUniformBufferDescriptor(State* vkRendererBackend, DescriptorHeap* heap, ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
+	void DescriptorHeap::writeUniformBufferDescriptor(ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
 	{
-		assert(vkRendererBackend);
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 		assert(isValid(handle));
 		assert(handle.kind == ResourceDescriptorKind::UniformBuffer);
 
 		VkDeviceAddressRangeEXT addressRange = VkDeviceAddressRangeEXT{ .address = buffer.address + offset, .size = range };
 
-		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(heap, handle);
+		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(handle);
 
 		// Where in the descriptor heap the descriptor info will be written onto.
 		VkHostAddressRangeEXT heapAddressRange{
-			.address = heap->resourceHeapStagingMappedData + descriptorOffset,
-			.size = heap->bufferDescriptorSize
+			.address = resourceHeapStagingMappedData + descriptorOffset,
+			.size = bufferDescriptorSize
 		};
 
 		s_bufferWrites.push_back(BufferWriteInfo{
@@ -397,22 +399,21 @@ namespace SK::VkRendererBackend
 		});
 	}
 
-	void writeStorageBufferDescriptor(State* vkRendererBackend, DescriptorHeap* heap, ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
+	void DescriptorHeap::writeStorageBufferDescriptor(ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
 	{
-		assert(vkRendererBackend);
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 		assert(isValid(handle));
 		assert(handle.kind == ResourceDescriptorKind::StorageBuffer);
 
 		VkDeviceAddressRangeEXT addressRange = VkDeviceAddressRangeEXT{ .address = buffer.address + offset, .size = range };
 
-		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(heap, handle);
+		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(handle);
 
 		// Where in the descriptor heap the descriptor info will be written onto.
 		VkHostAddressRangeEXT heapAddressRange{
-			.address = heap->resourceHeapStagingMappedData + descriptorOffset,
-			.size = heap->bufferDescriptorSize
+			.address = resourceHeapStagingMappedData + descriptorOffset,
+			.size = bufferDescriptorSize
 		};
 
 		s_bufferWrites.push_back(BufferWriteInfo{
@@ -422,19 +423,18 @@ namespace SK::VkRendererBackend
 		});
 	}
 
-	void writeSampledImageDescriptor(State* vkRendererBackend, DescriptorHeap* heap, ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
+	void DescriptorHeap::writeSampledImageDescriptor(ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
 	{
-		assert(vkRendererBackend);
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 		assert(isValid(handle));
 		assert(handle.kind == ResourceDescriptorKind::SampledImage);
 		assert(viewInfo.image != VK_NULL_HANDLE);
 
-		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(heap, handle);
+		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(handle);
 
 		// Where in the descriptor heap the descriptor info will be written onto.
-		VkHostAddressRangeEXT heapAddressRange{ .address = heap->resourceHeapStagingMappedData + descriptorOffset, .size = heap->imageDescriptorSize };
+		VkHostAddressRangeEXT heapAddressRange{ .address = resourceHeapStagingMappedData + descriptorOffset, .size = imageDescriptorSize };
 
 		s_textureWrites.push_back(TextureWriteInfo{
 			.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -444,20 +444,19 @@ namespace SK::VkRendererBackend
 		});
 	}
 
-	void writeStorageImageDescriptor(State* vkRendererBackend, DescriptorHeap* heap, ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
+	void DescriptorHeap::writeStorageImageDescriptor(ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
 	{
-		assert(vkRendererBackend);
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 		assert(isValid(handle));
 		assert(handle.kind == ResourceDescriptorKind::StorageImage);
 		assert(viewInfo.image != VK_NULL_HANDLE);
 
 
-		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(heap, handle);
+		const VkDeviceSize descriptorOffset = getResourceDescriptorOffset(handle);
 
 		// Where in the descriptor heap the descriptor info will be written onto.
-		VkHostAddressRangeEXT heapAddressRange{ .address = heap->resourceHeapStagingMappedData + descriptorOffset, .size = heap->imageDescriptorSize };
+		VkHostAddressRangeEXT heapAddressRange{ .address = resourceHeapStagingMappedData + descriptorOffset, .size = imageDescriptorSize };
 
 		s_textureWrites.push_back(TextureWriteInfo{
 			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -467,16 +466,15 @@ namespace SK::VkRendererBackend
 		});
 	}
 
-	void writeSamplerDescriptor(State* vkRendererBackend, DescriptorHeap* heap, SamplerDescriptorHandle handle, const VkSamplerCreateInfo& samplerInfo)
+	void DescriptorHeap::writeSamplerDescriptor(SamplerDescriptorHandle handle, const VkSamplerCreateInfo& samplerInfo)
 	{
-		assert(vkRendererBackend);
-		assert(heap);
-		assert(heap->initialized);
+		assert(this);
+		assert(initialized);
 		assert(isValid(handle));
 
-		const VkDeviceSize samplerOffset = getSamplerDescriptorOffset(heap, handle);
+		const VkDeviceSize samplerOffset = getSamplerDescriptorOffset(handle);
 
-		VkHostAddressRangeEXT heapAddressRange{ .address = heap->samplerHeapStagingMappedData + samplerOffset, .size = heap->samplerDescriptorSize };
+		VkHostAddressRangeEXT heapAddressRange{ .address = samplerHeapStagingMappedData + samplerOffset, .size = samplerDescriptorSize };
 
 		// Store the necessary info to update later at once.
 		s_samplerInfos.push_back(samplerInfo);

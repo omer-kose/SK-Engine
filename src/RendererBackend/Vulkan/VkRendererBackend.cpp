@@ -202,8 +202,8 @@ bool SK::VkRendererBackend::beginFrame(State* vkRendererBackend)
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
     // Bind and upload the descriptor heaps once per-frame.
-    SK::VkRendererBackend::uploadDescriptorHeap(vkRendererBackend, cmd, &vkRendererBackend->descriptorHeap);
-    SK::VkRendererBackend::bindDescriptorHeap(vkRendererBackend, cmd, &vkRendererBackend->descriptorHeap);
+    vkRendererBackend->descriptorHeap.upload(vkRendererBackend, cmd);
+    vkRendererBackend->descriptorHeap.bind(vkRendererBackend, cmd);
 
     // Frame has begun successfully, fill in per-frame transient state in the renderer backend state
     vkRendererBackend->currentCmdBuffer = currentFrame.mainCommandBuffer;
@@ -224,7 +224,7 @@ void SK::VkRendererBackend::endFrame(State* vkRendererBackend)
     VK_CHECK(vkEndCommandBuffer(cmd));
 
     // Update the descriptor heap staging buffers.
-    SK::VkRendererBackend::updateDescriptorHeap(vkRendererBackend, &vkRendererBackend->descriptorHeap);
+    vkRendererBackend->descriptorHeap.update(vkRendererBackend);
 
     // Prepare the submission
     // GPU will wait on the swapchainAcquireSemaphore before outputting the final colors. swapchainAcquireSemaphore is set to be signalled in vkAcquireSwapchainImage once the swapchain is done presenting that image.
@@ -457,8 +457,8 @@ SK::VkRendererBackend::SamplerDescriptorHandle SK::VkRendererBackend::createSamp
         return existing->second;
     }
 
-    SamplerDescriptorHandle handle = allocateSamplerDescriptor(&vkRendererBackend->descriptorHeap);
-    writeSamplerDescriptor(vkRendererBackend, &vkRendererBackend->descriptorHeap, handle, samplerInfo);
+    SamplerDescriptorHandle handle = vkRendererBackend->descriptorHeap.allocateSamplerDescriptor();
+    vkRendererBackend->descriptorHeap.writeSamplerDescriptor(handle, samplerInfo);
     vkRendererBackend->samplerDescriptorCache[samplerHash] = handle;
 
     return handle;
@@ -907,9 +907,9 @@ void SK::VkRendererBackend::handleWindowResize(State* vkRendererBackend)
 void SK::VkRendererBackend::initDescriptors(State* vkRendererBackend)
 {
     DescriptorHeapDesc desc{ .maxResourceDescriptors = 8192, .maxSamplerDescriptors = 256 };
-    initDescriptorHeap(vkRendererBackend, &vkRendererBackend->descriptorHeap, desc);
+    vkRendererBackend->descriptorHeap.init(vkRendererBackend, desc);
     vkRendererBackend->mainDeletionQueue.pushFunction([=]() {
-        destroyDescriptorHeap(vkRendererBackend, &vkRendererBackend->descriptorHeap);
+        vkRendererBackend->descriptorHeap.destroy(vkRendererBackend);
     });
 }
 
@@ -959,10 +959,8 @@ void SK::VkRendererBackend::initGlobalSceneBuffer(State* vkRendererBackend)
     });
 
     // Allocate the descriptor slot from the heap and write the descriptor info onto it.
-    vkRendererBackend->gpuSceneDataDescriptor = allocateResourceDescriptor(&vkRendererBackend->descriptorHeap, ResourceDescriptorKind::UniformBuffer);
-    writeUniformBufferDescriptor(
-        vkRendererBackend, 
-        &vkRendererBackend->descriptorHeap, 
+    vkRendererBackend->gpuSceneDataDescriptor = vkRendererBackend->descriptorHeap.allocateResourceDescriptor(ResourceDescriptorKind::UniformBuffer);
+    vkRendererBackend->descriptorHeap.writeUniformBufferDescriptor( 
         vkRendererBackend->gpuSceneDataDescriptor,
         vkRendererBackend->gpuSceneDataBuffer,
         0,

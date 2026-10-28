@@ -65,10 +65,8 @@ void SK::VkRendererBackend::buildMaterialRegistry(State* vkRendererBackend, SK::
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, static_cast<void*>(pbrMaterialData.data()));
 
 	// Create the descriptor
-	vkMaterialRegistry->pbrMaterialBufferDescriptor = SK::VkRendererBackend::allocateResourceDescriptor(&vkRendererBackend->descriptorHeap, SK::VkRendererBackend::ResourceDescriptorKind::StorageBuffer);
-	SK::VkRendererBackend::writeStorageBufferDescriptor(
-		vkRendererBackend,
-		&vkRendererBackend->descriptorHeap,
+	vkMaterialRegistry->pbrMaterialBufferDescriptor = vkRendererBackend->descriptorHeap.allocateResourceDescriptor(SK::VkRendererBackend::ResourceDescriptorKind::StorageBuffer);
+	vkRendererBackend->descriptorHeap.writeStorageBufferDescriptor(
 		vkMaterialRegistry->pbrMaterialBufferDescriptor,
 		vkMaterialRegistry->pbrMaterialBuffer,
 		0,

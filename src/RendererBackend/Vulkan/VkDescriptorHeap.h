@@ -121,54 +121,44 @@ namespace SK::VkRendererBackend
 		std::vector<uint8_t> samplerFreeList{};
 
 		bool initialized = false;
-	};
 
-	void initDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap, const DescriptorHeapDesc& desc);
-	void destroyDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap);
-	void updateDescriptorHeap(State* vkRendererBackend, DescriptorHeap* heap);
-	void uploadDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, DescriptorHeap* heap);
-	void bindDescriptorHeap(State* vkRendererBackend, VkCommandBuffer cmd, const DescriptorHeap* heap);
-	// Allocate functions allocates a slot in the heap and returns a handle. The descriptor info is then written with write functions with that handle to that heap slot.
-	ResourceDescriptorHandle allocateResourceDescriptor(DescriptorHeap* heap, ResourceDescriptorKind kind);
-	void deleteDescriptor(DescriptorHeap* heap, ResourceDescriptorHandle& handle);
-	SamplerDescriptorHandle allocateSamplerDescriptor(DescriptorHeap* heap);
-	void deleteDescriptor(DescriptorHeap* heap, SamplerDescriptorHandle& handle);
-	VkDeviceSize getResourceDescriptorOffset(const DescriptorHeap* heap, ResourceDescriptorHandle handle);
-	VkDeviceSize getSamplerDescriptorOffset(const DescriptorHeap* heap, SamplerDescriptorHandle handle);
-	void writeUniformBufferDescriptor(
-		State* vkRendererBackend,
-		DescriptorHeap* heap,
-		ResourceDescriptorHandle handle,
-		const AllocatedBuffer& buffer,
-		VkDeviceSize offset,
-		VkDeviceSize range
-	);
-	void writeStorageBufferDescriptor(
-		State* vkRendererBackend,
-		DescriptorHeap* heap,
-		ResourceDescriptorHandle handle,
-		const AllocatedBuffer& buffer,
-		VkDeviceSize offset,
-		VkDeviceSize range
-	);
-	void writeSampledImageDescriptor(
-		State* vkRendererBackend,
-		DescriptorHeap* heap,
-		ResourceDescriptorHandle handle,
-		const VkImageViewCreateInfo& viewInfo,
-		VkImageLayout layout
-	);
-	void writeStorageImageDescriptor(
-		State* vkRendererBackend,
-		DescriptorHeap* heap,
-		ResourceDescriptorHandle handle,
-		const VkImageViewCreateInfo& viewInfo,
-		VkImageLayout layout
-	);
-	void writeSamplerDescriptor(
-		State* vkRendererBackend,
-		DescriptorHeap* heap,
-		SamplerDescriptorHandle handle,
-		const VkSamplerCreateInfo& samplerInfo
-	);
+		void init(State* vkRendererBackend, const DescriptorHeapDesc& desc);
+		void destroy(State* vkRendererBackend);
+		void update(State* vkRendererBackend);
+		void upload(State* vkRendererBackend, VkCommandBuffer cmd);
+		void bind(State* vkRendererBackend, VkCommandBuffer cmd);
+		// Allocate functions allocates a slot in the heap and returns a handle. The descriptor info is then written with write functions with that handle to that heap slot.
+		ResourceDescriptorHandle allocateResourceDescriptor(ResourceDescriptorKind kind);
+		void deleteDescriptor(ResourceDescriptorHandle& handle);
+		SamplerDescriptorHandle allocateSamplerDescriptor();
+		void deleteDescriptor(SamplerDescriptorHandle& handle);
+		VkDeviceSize getResourceDescriptorOffset(const ResourceDescriptorHandle handle);
+		VkDeviceSize getSamplerDescriptorOffset(const SamplerDescriptorHandle handle);
+		void writeUniformBufferDescriptor(
+			ResourceDescriptorHandle handle,
+			const AllocatedBuffer& buffer,
+			VkDeviceSize offset,
+			VkDeviceSize range
+		);
+		void writeStorageBufferDescriptor(
+			ResourceDescriptorHandle handle,
+			const AllocatedBuffer& buffer,
+			VkDeviceSize offset,
+			VkDeviceSize range
+		);
+		void writeSampledImageDescriptor(
+			ResourceDescriptorHandle handle,
+			const VkImageViewCreateInfo& viewInfo,
+			VkImageLayout layout
+		);
+		void writeStorageImageDescriptor(
+			ResourceDescriptorHandle handle,
+			const VkImageViewCreateInfo& viewInfo,
+			VkImageLayout layout
+		);
+		void writeSamplerDescriptor(
+			SamplerDescriptorHandle handle,
+			const VkSamplerCreateInfo& samplerInfo
+		);
+	};
 };

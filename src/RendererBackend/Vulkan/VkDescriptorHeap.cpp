@@ -217,7 +217,7 @@ namespace SK::VkRendererBackend
 		copy.size = samplerHeapSize;
 		vkCmdCopyBuffer(cmd, samplerHeapBufferStaging.buffer, samplerHeapBufferGPU.buffer, 1, &copy);
 
-		// Issue a barrier at the beginning of the frame to synchronize.
+		// Issue a barrier to synchronize. Upload is always called at the beginning of the frame. So, barrier is set wrt to that.
 		VkMemoryBarrier2 barrier{
 			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,

@@ -448,6 +448,59 @@ VkImageViewCreateInfo SK::VkRendererBackend::createImageViewInfo(State* vkRender
     return viewInfo;
 }
 
+SK::VkRendererBackend::ResourceDescriptorHandle SK::VkRendererBackend::allocateResourceDescriptor(State* vkRendererBackend, ResourceDescriptorKind kind)
+{
+    return vkRendererBackend->descriptorHeap.allocateResourceDescriptor(kind);
+}
+
+void SK::VkRendererBackend::writeUniformBufferDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
+{
+    vkRendererBackend->descriptorHeap.writeUniformBufferDescriptor(handle, buffer, offset, range);
+}
+
+void SK::VkRendererBackend::writeStorageBufferDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
+{
+    vkRendererBackend->descriptorHeap.writeStorageBufferDescriptor(handle, buffer, offset, range);
+}
+
+void SK::VkRendererBackend::writeSampledImageDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
+{
+    vkRendererBackend->descriptorHeap.writeSampledImageDescriptor(handle, viewInfo, layout);
+}
+
+void SK::VkRendererBackend::writeStorageImageDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
+{
+    vkRendererBackend->descriptorHeap.writeStorageImageDescriptor(handle, viewInfo, layout);
+}
+
+SK::VkRendererBackend::ResourceDescriptorHandle SK::VkRendererBackend::createUniformBufferDescriptor(State* vkRendererBackend, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
+{
+    SK::VkRendererBackend::ResourceDescriptorHandle handle = allocateResourceDescriptor(vkRendererBackend, SK::VkRendererBackend::ResourceDescriptorKind::UniformBuffer);
+    writeUniformBufferDescriptor(vkRendererBackend, handle, buffer, offset, range);
+    return handle;
+}
+
+SK::VkRendererBackend::ResourceDescriptorHandle SK::VkRendererBackend::createStorageBufferDescriptor(State* vkRendererBackend, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range)
+{
+    SK::VkRendererBackend::ResourceDescriptorHandle handle = allocateResourceDescriptor(vkRendererBackend, SK::VkRendererBackend::ResourceDescriptorKind::StorageBuffer);
+    writeStorageBufferDescriptor(vkRendererBackend, handle, buffer, offset, range);
+    return handle;
+}
+
+SK::VkRendererBackend::ResourceDescriptorHandle SK::VkRendererBackend::createSampledImageDescriptor(State* vkRendererBackend, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
+{
+    SK::VkRendererBackend::ResourceDescriptorHandle handle = allocateResourceDescriptor(vkRendererBackend, SK::VkRendererBackend::ResourceDescriptorKind::SampledImage);
+    writeSampledImageDescriptor(vkRendererBackend, handle, viewInfo, layout);
+    return handle;
+}
+
+SK::VkRendererBackend::ResourceDescriptorHandle SK::VkRendererBackend::createStorageImageDescriptor(State* vkRendererBackend, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout)
+{
+    SK::VkRendererBackend::ResourceDescriptorHandle handle = allocateResourceDescriptor(vkRendererBackend, SK::VkRendererBackend::ResourceDescriptorKind::StorageImage);
+    writeStorageImageDescriptor(vkRendererBackend, handle, viewInfo, layout);
+    return handle;
+}
+
 SK::VkRendererBackend::SamplerDescriptorHandle SK::VkRendererBackend::createSamplerDescriptor(State* vkRendererBackend, const VkSamplerCreateInfo& samplerInfo)
 {
     size_t samplerHash = hashSamplerInfo(samplerInfo);
@@ -480,6 +533,11 @@ SK::VkRendererBackend::SamplerDescriptorHandle SK::VkRendererBackend::createSamp
     samplerInfo.maxAnisotropy = mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR ? 4.0f : 1.0f;
 
     return createSamplerDescriptor(vkRendererBackend, samplerInfo);
+}
+
+void SK::VkRendererBackend::deleteDescriptor(State* vkRendererBackend, ResourceDescriptorHandle& handle)
+{
+    vkRendererBackend->descriptorHeap.deleteDescriptor(handle);
 }
 
 VkGPUMeshBuffers SK::VkRendererBackend::uploadMesh(State* vkRendererBackend, std::span<SK::Renderer::Vertex> vertices, std::span<uint32_t> indices)
@@ -908,10 +966,10 @@ void SK::VkRendererBackend::initDescriptors(State* vkRendererBackend)
 {
     DescriptorHeapDesc desc{ .maxResourceDescriptors = 8192, .maxSamplerDescriptors = 256 };
     vkRendererBackend->descriptorHeap.init(vkRendererBackend, desc);
-    vkRendererBackend->mainDeletionQueue.pushFunction([=]() {
+        vkRendererBackend->mainDeletionQueue.pushFunction([=]() {
         vkRendererBackend->descriptorHeap.destroy(vkRendererBackend);
-    });
-}
+            });
+    }
 
 void SK::VkRendererBackend::initDefaultData(State* vkRendererBackend)
 {

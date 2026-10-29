@@ -187,9 +187,20 @@ namespace SK::VkRendererBackend
 	// Utility function to provide VkImageViewCreateInfo which is used while writing image descriptors.
 	VkImageViewCreateInfo createImageViewInfo(State* vkRendererBackend, const AllocatedImage& image);
 
+	ResourceDescriptorHandle allocateResourceDescriptor(State* vkRendererBackend, ResourceDescriptorKind kind);
+	void writeUniformBufferDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset,VkDeviceSize range);
+	void writeStorageBufferDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range);
+	void writeSampledImageDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout);
+	void writeStorageImageDescriptor(State* vkRendererBackend, ResourceDescriptorHandle handle, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout);
+	// Resource descriptor creation utilities to create a descriptor for the given resource directly
+	ResourceDescriptorHandle createUniformBufferDescriptor(State* vkRendererBackend, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range);
+	ResourceDescriptorHandle createStorageBufferDescriptor(State* vkRendererBackend, const AllocatedBuffer& buffer, VkDeviceSize offset, VkDeviceSize range);
+	ResourceDescriptorHandle createSampledImageDescriptor(State* vkRendererBackend, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout);
+	ResourceDescriptorHandle createStorageImageDescriptor(State* vkRendererBackend, const VkImageViewCreateInfo& viewInfo, VkImageLayout layout);
 	SamplerDescriptorHandle createSamplerDescriptor(State* vkRendererBackend, const VkSamplerCreateInfo& samplerInfo);
 	// A much simplified and default version that is being used by the current asset system.
 	SamplerDescriptorHandle createSamplerDescriptor(State* vkRendererBackend, VkFilter minFilter, VkFilter magFilter, VkSamplerMipmapMode mipmapMode, VkSamplerAddressMode addressMode);
+	void deleteDescriptor(State* vkRendererBackend, ResourceDescriptorHandle& handle);
 
 	VkGPUMeshBuffers uploadMesh(State* vkRendererBackend, std::span<SK::Renderer::Vertex> vertices, std::span<uint32_t> indices);
 

@@ -89,29 +89,20 @@ void SK::VkRendererBackend::buildGPUAssets(State* vkRendererBackend, SK::Asset::
             size_t dataSize = texture.image.width * texture.image.height * 1 * 4;
             gpuTexture.image = SK::VkRendererBackend::createImage(vkRendererBackend, (void*)texture.image.data.data(), dataSize, VkExtent3D{ texture.image.width, texture.image.height, 1 }, imageFormat, VK_IMAGE_USAGE_SAMPLED_BIT, texture.description.mipmapped);
             gpuTexture.ownsImage = true;
-
-            // Create the image descriptor
-            gpuTexture.imageDescriptor = vkRendererBackend->descriptorHeap.allocateResourceDescriptor(SK::VkRendererBackend::ResourceDescriptorKind::SampledImage);
-            vkRendererBackend->descriptorHeap.writeSampledImageDescriptor(
-                gpuTexture.imageDescriptor,
-                SK::VkRendererBackend::createImageViewInfo(vkRendererBackend, gpuTexture.image),
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // sampled image
-            );
         }
         else
         {
             // Absence of the image data is actually a bug for a texture. Assign error image for debugging.
             gpuTexture.image = vkRendererBackend->errorCheckerboardImage;
             gpuTexture.ownsImage = false;
-
-            // Still create an image descriptor (leads to duplicate descriptors if more than one errorenous textures are loaded but it is fine as errorenous textures are there to be cleaned not used in a running program).
-            gpuTexture.imageDescriptor = vkRendererBackend->descriptorHeap.allocateResourceDescriptor(SK::VkRendererBackend::ResourceDescriptorKind::SampledImage);
-            vkRendererBackend->descriptorHeap.writeSampledImageDescriptor(
-                gpuTexture.imageDescriptor,
-                SK::VkRendererBackend::createImageViewInfo(vkRendererBackend, gpuTexture.image),
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // sampled image
-            );
         }
+
+        // Create the image descriptor
+        gpuTexture.imageDescriptor = SK::VkRendererBackend::createSampledImageDescriptor(
+            vkRendererBackend,
+            SK::VkRendererBackend::createImageViewInfo(vkRendererBackend, gpuTexture.image),
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // sampled image
+        );
 
         gpuTexture.samplerDescriptor = SK::VkRendererBackend::createSamplerDescriptor(vkRendererBackend,
             mapFilterMode(texture.description.minFilter),
@@ -140,6 +131,8 @@ void SK::VkRendererBackend::clearGPUAssets(State* vkRendererBackend, VkAssetRegi
         {
             SK::VkRendererBackend::destroyImage(vkRendererBackend, texture.image);
         }
+
+        SK::VkRendererBackend::deleteDescriptor(vkRendererBackend, texture.imageDescriptor);
     }
 
     vkAssetRegistry->meshes.clear();

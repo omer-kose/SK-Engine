@@ -409,8 +409,8 @@ static void blitImage_(SK::Renderer::RenderContext* renderContext, const SK::Ren
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 
-	const AllocatedImage& srcImage = vkRenderContext->textures[src.id].image;
-	const AllocatedImage& dstImage = vkRenderContext->textures[dst.id].image;
+	const SK::VkRendererBackend::AllocatedImage& srcImage = vkRenderContext->textures[src.id].image;
+	const SK::VkRendererBackend::AllocatedImage& dstImage = vkRenderContext->textures[dst.id].image;
 
 	SK::VkUtil::blitImage(vkRendererBackend->currentCmdBuffer, srcImage.image, dstImage.image, { srcImage.imageExtent.width, srcImage.imageExtent.height }, { dstImage.imageExtent.width, dstImage.imageExtent.height });
 }

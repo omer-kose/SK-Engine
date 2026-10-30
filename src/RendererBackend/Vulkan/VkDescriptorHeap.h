@@ -1,6 +1,6 @@
 #pragma once
 
-#include <RendererBackend/Vulkan/VkTypes.h>
+#include <RendererBackend/Vulkan/VkCommon.h>
 
 #include <cstdint>
 #include <limits>
@@ -20,8 +20,9 @@
 	Per Vulkan spec, the application has control of where the driver’s reserved range ends up. In this implementation, reserved range will be placed at the end of the heap buffer. So, the descriptor blob info start
 	from offset 0.
 
-	Descriptor Heap internally holds 2 buffers inside, one staging and one GPU buffer. Staging buffer is updated on the CPU and at the beginning of every frame, it is uploaded to the GPU. This way, the descriptor reads
-	will be local in the GPU and more efficient.
+	Descriptor Heap internally holds 2 kinds of buffers for resource and sampler heaps inside; one staging buffer and frames-in-flight amount of GPU buffers. 
+	Staging buffer is updated on the CPU and at the beginning of every frame corresponding frame's descriptor heap is uploaded to the GPU if necessary. 
+	This way, the descriptor reads will be local in the GPU and more efficient.
 */
 
 namespace SK::VkRendererBackend
@@ -86,11 +87,11 @@ namespace SK::VkRendererBackend
 
 	struct DescriptorHeap
 	{
-		AllocatedBuffer resourceHeapBufferStaging{};
-		AllocatedBuffer samplerHeapBufferStaging{};
-
-		AllocatedBuffer resourceHeapBufferGPU{};
-		AllocatedBuffer samplerHeapBufferGPU{};
+		AllocatedBuffer resourceHeapStagingBuffer{};
+		AllocatedBuffer samplerHeapStagingBuffer{};
+		
+		AllocatedBuffer resourceHeapGPUBuffers[NUM_FRAMES_IN_FLIGHT];
+		AllocatedBuffer samplerHeapGPUBuffers[NUM_FRAMES_IN_FLIGHT];
 			
 		uint8_t* resourceHeapStagingMappedData;
 		uint8_t* samplerHeapStagingMappedData;
@@ -125,8 +126,8 @@ namespace SK::VkRendererBackend
 		void init(State* vkRendererBackend, const DescriptorHeapDesc& desc);
 		void destroy(State* vkRendererBackend);
 		void update(State* vkRendererBackend);
-		void upload(State* vkRendererBackend, VkCommandBuffer cmd);
-		void bind(State* vkRendererBackend, VkCommandBuffer cmd);
+		void upload(State* vkRendererBackend, VkCommandBuffer cmd, uint8_t frameIndex);
+		void bind(State* vkRendererBackend, VkCommandBuffer cmd, uint8_t frameIndex);
 		// Allocate functions allocates a slot in the heap and returns a handle. The descriptor info is then written with write functions with that handle to that heap slot.
 		ResourceDescriptorHandle allocateResourceDescriptor(ResourceDescriptorKind kind);
 		void deleteDescriptor(ResourceDescriptorHandle& handle);

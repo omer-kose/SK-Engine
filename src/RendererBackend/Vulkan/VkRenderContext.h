@@ -2,7 +2,7 @@
 
 #include <Renderer/RenderContext.h>
 
-#include <RendererBackend/Vulkan/VkTypes.h>
+#include <RendererBackend/Vulkan/VkCommon.h>
 
 #include <cstddef>
 #include <cstdint>

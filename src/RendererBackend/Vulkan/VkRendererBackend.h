@@ -4,7 +4,7 @@
 #pragma once
 #include <span>
 
-#include <RendererBackend/Vulkan/VkTypes.h>
+#include <RendererBackend/Vulkan/VkCommon.h>
 #include <RendererBackend/Vulkan/VkDescriptorHeap.h>
 #include <RendererBackend/Vulkan/VkPipelines.h>
 
@@ -43,8 +43,6 @@ namespace SK::VkRendererBackend
 		float sceneUpdateTime;
 		float geometryDrawRecordTime;
 	};
-
-	constexpr unsigned int NUM_FRAMES_IN_FLIGHT = 2u;
 
 	struct Shader
 	{

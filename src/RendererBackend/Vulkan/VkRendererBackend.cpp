@@ -7,7 +7,7 @@
 #include <SDL_vulkan.h>
 
 #include <RendererBackend/Vulkan/VkInitializers.h>
-#include <RendererBackend/Vulkan/VkTypes.h>
+#include <RendererBackend/Vulkan/VkCommon.h>
 #include <RendererBackend/Vulkan/VkImages.h>
 #include "VkBootstrap.h"
 
@@ -201,14 +201,17 @@ bool SK::VkRendererBackend::beginFrame(State* vkRendererBackend)
     // Start the command buffer recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    // Bind and upload the descriptor heaps once per-frame.
-    vkRendererBackend->descriptorHeap.upload(vkRendererBackend, cmd);
-    vkRendererBackend->descriptorHeap.bind(vkRendererBackend, cmd);
+    // Update the descriptor heap staging buffers.
+    vkRendererBackend->descriptorHeap.update(vkRendererBackend);
+    // Update, bind and upload the descriptor heaps once per-frame.
+    uint8_t currentFrameIndex = vkRendererBackend->frameNumber % NUM_FRAMES_IN_FLIGHT;
+    vkRendererBackend->descriptorHeap.upload(vkRendererBackend, cmd, currentFrameIndex);
+    vkRendererBackend->descriptorHeap.bind(vkRendererBackend, cmd, currentFrameIndex);
 
     // Frame has begun successfully, fill in per-frame transient state in the renderer backend state
     vkRendererBackend->currentCmdBuffer = currentFrame.mainCommandBuffer;
     vkRendererBackend->currentSwapchainImageIndex = swapchainImageIndex;
-    vkRendererBackend->currentFrameIndex = vkRendererBackend->frameNumber % NUM_FRAMES_IN_FLIGHT;
+    vkRendererBackend->currentFrameIndex = currentFrameIndex;
 
     return true;
 }
@@ -222,9 +225,6 @@ void SK::VkRendererBackend::endFrame(State* vkRendererBackend)
 
     // Finalize the command buffer
     VK_CHECK(vkEndCommandBuffer(cmd));
-
-    // Update the descriptor heap staging buffers.
-    vkRendererBackend->descriptorHeap.update(vkRendererBackend);
 
     // Prepare the submission
     // GPU will wait on the swapchainAcquireSemaphore before outputting the final colors. swapchainAcquireSemaphore is set to be signalled in vkAcquireSwapchainImage once the swapchain is done presenting that image.
@@ -278,7 +278,7 @@ void SK::VkRendererBackend::immediateSubmit(State* vkRendererBackend, std::funct
     VK_CHECK(vkWaitForFences(vkRendererBackend->device, 1, &vkRendererBackend->immeadiateFence, true, 9999999999));
 }
 
-AllocatedBuffer SK::VkRendererBackend::createBuffer(State* vkRendererBackend, size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+SK::VkRendererBackend::AllocatedBuffer SK::VkRendererBackend::createBuffer(State* vkRendererBackend, size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 {
     // Allocate buffer
     VkBufferCreateInfo bufferInfo = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr };
@@ -301,9 +301,9 @@ AllocatedBuffer SK::VkRendererBackend::createBuffer(State* vkRendererBackend, si
     return newBuffer;
 }
 
-AllocatedBuffer SK::VkRendererBackend::createAndUploadGPUBuffer(State* vkRendererBackend, size_t allocSize, VkBufferUsageFlags usage, const void* data, size_t srcOffset, size_t dstOffset)
+SK::VkRendererBackend::AllocatedBuffer SK::VkRendererBackend::createAndUploadGPUBuffer(State* vkRendererBackend, size_t allocSize, VkBufferUsageFlags usage, const void* data, size_t srcOffset, size_t dstOffset)
 {
-    AllocatedBuffer newBuffer = createBuffer(vkRendererBackend, allocSize, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    SK::VkRendererBackend::AllocatedBuffer newBuffer = createBuffer(vkRendererBackend, allocSize, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     AllocatedBuffer staging = createBuffer(vkRendererBackend, allocSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     void* pStaging = staging.allocation->GetMappedData();
@@ -325,9 +325,9 @@ AllocatedBuffer SK::VkRendererBackend::createAndUploadGPUBuffer(State* vkRendere
     return newBuffer;
 }
 
-AllocatedBuffer SK::VkRendererBackend::uploadStagingBuffer(State* vkRendererBackend, VkBuffer stagingBuffer, size_t allocSize, VkBufferUsageFlags usage, size_t srcOffset, size_t dstOffset)
+SK::VkRendererBackend::AllocatedBuffer SK::VkRendererBackend::uploadStagingBuffer(State* vkRendererBackend, VkBuffer stagingBuffer, size_t allocSize, VkBufferUsageFlags usage, size_t srcOffset, size_t dstOffset)
 {
-    AllocatedBuffer newBuffer = createBuffer(vkRendererBackend, allocSize, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    SK::VkRendererBackend::AllocatedBuffer newBuffer = createBuffer(vkRendererBackend, allocSize, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     immediateSubmit(vkRendererBackend, [&](VkCommandBuffer cmd) {
         VkBufferCopy copy{};
@@ -346,9 +346,9 @@ void SK::VkRendererBackend::destroyBuffer(State* vkRendererBackend, const Alloca
     vmaDestroyBuffer(vkRendererBackend->vmaAllocator, buffer.buffer, buffer.allocation);
 }
 
-AllocatedImage SK::VkRendererBackend::createImage(State* vkRendererBackend, VkExtent3D imageExtent, VkFormat format, VkImageUsageFlags usage, bool mipMapped)
+SK::VkRendererBackend::AllocatedImage SK::VkRendererBackend::createImage(State* vkRendererBackend, VkExtent3D imageExtent, VkFormat format, VkImageUsageFlags usage, bool mipMapped)
 {
-    AllocatedImage newImage;
+    SK::VkRendererBackend::AllocatedImage newImage;
     newImage.imageFormat = format;
     newImage.imageExtent = imageExtent;
 
@@ -383,9 +383,9 @@ AllocatedImage SK::VkRendererBackend::createImage(State* vkRendererBackend, VkEx
     return newImage;
 }
 
-AllocatedImage SK::VkRendererBackend::createImage(State* vkRendererBackend, const void* data, size_t dataSize, VkExtent3D imageExtent, VkFormat format, VkImageUsageFlags usage, bool mipMapped)
+SK::VkRendererBackend::AllocatedImage SK::VkRendererBackend::createImage(State* vkRendererBackend, const void* data, size_t dataSize, VkExtent3D imageExtent, VkFormat format, VkImageUsageFlags usage, bool mipMapped)
 {
-    AllocatedBuffer uploadBuffer = createBuffer(vkRendererBackend, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    SK::VkRendererBackend::AllocatedBuffer uploadBuffer = createBuffer(vkRendererBackend, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     memcpy(uploadBuffer.allocInfo.pMappedData, data, dataSize);
 
@@ -540,12 +540,12 @@ void SK::VkRendererBackend::deleteDescriptor(State* vkRendererBackend, ResourceD
     vkRendererBackend->descriptorHeap.deleteDescriptor(handle);
 }
 
-VkGPUMeshBuffers SK::VkRendererBackend::uploadMesh(State* vkRendererBackend, std::span<SK::Renderer::Vertex> vertices, std::span<uint32_t> indices)
+SK::VkRendererBackend::VkGPUMeshBuffers SK::VkRendererBackend::uploadMesh(State* vkRendererBackend, std::span<SK::Renderer::Vertex> vertices, std::span<uint32_t> indices)
 {
     const size_t vertexBufferSize = vertices.size() * sizeof(SK::Renderer::Vertex);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 
-    VkGPUMeshBuffers meshBuffers;
+    SK::VkRendererBackend::VkGPUMeshBuffers meshBuffers;
 
     // Create the vertex buffer and fetch the device address of it
     meshBuffers.vertexBuffer = createBuffer(vkRendererBackend, vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);

@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include <RendererBackend/Vulkan/VkTypes.h>
+#include <RendererBackend/Vulkan/VkCommon.h>
 
 namespace SK::VkInit 
 {

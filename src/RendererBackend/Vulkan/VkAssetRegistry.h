@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <string>
 
-#include <RendererBackend/Vulkan/VkTypes.h>
+#include <RendererBackend/Vulkan/VkCommon.h>
 #include <RendererBackend/Vulkan/VkDescriptorHeap.h>
 
 namespace SK::Asset

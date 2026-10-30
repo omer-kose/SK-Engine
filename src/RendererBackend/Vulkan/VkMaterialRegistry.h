@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include <RendererBackend/Vulkan/VkTypes.h>
+#include <RendererBackend/Vulkan/VkCommon.h>
 #include <RendererBackend/Vulkan/VkDescriptorHeap.h>
 
 #include <MaterialSystem/MaterialInfo.h>

@@ -96,13 +96,19 @@ namespace SK::VkRendererBackend
 		samplerReservedRangeOffset = samplerHeapSize - descriptorHeapProperties.minSamplerHeapReservedRange;
 		samplerReservedRangeSize = descriptorHeapProperties.minSamplerHeapReservedRange;
 
-		resourceHeapBufferStaging = createBuffer(vkRendererBackend, resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-		resourceHeapStagingMappedData = static_cast<uint8_t*>(resourceHeapBufferStaging.allocInfo.pMappedData);
-		resourceHeapBufferGPU = createBuffer(vkRendererBackend, resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+		resourceHeapStagingBuffer = createBuffer(vkRendererBackend, resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+		resourceHeapStagingMappedData = static_cast<uint8_t*>(resourceHeapStagingBuffer.allocInfo.pMappedData);
+		for (uint8_t i = 0; i < SK::VkRendererBackend::NUM_FRAMES_IN_FLIGHT; ++i)
+		{
+			resourceHeapGPUBuffers[i] = createBuffer(vkRendererBackend, resourceHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+		}
 
-		samplerHeapBufferStaging = createBuffer(vkRendererBackend, samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-		samplerHeapStagingMappedData = static_cast<uint8_t*>(samplerHeapBufferStaging.allocInfo.pMappedData);
-		samplerHeapBufferGPU = createBuffer(vkRendererBackend, samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+		samplerHeapStagingBuffer = createBuffer(vkRendererBackend, samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+		samplerHeapStagingMappedData = static_cast<uint8_t*>(samplerHeapStagingBuffer.allocInfo.pMappedData);
+		for (uint8_t i = 0; i < SK::VkRendererBackend::NUM_FRAMES_IN_FLIGHT; ++i)
+		{
+			samplerHeapGPUBuffers[i] = createBuffer(vkRendererBackend, samplerHeapSize, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+		}
 
 		s_bufferWrites = {};
 		s_textureWrites = {};
@@ -122,10 +128,13 @@ namespace SK::VkRendererBackend
 			return;
 		}
 
-		destroyBuffer(vkRendererBackend, resourceHeapBufferStaging);
-		destroyBuffer(vkRendererBackend, resourceHeapBufferGPU);
-		destroyBuffer(vkRendererBackend, samplerHeapBufferStaging);
-		destroyBuffer(vkRendererBackend, samplerHeapBufferGPU);
+		destroyBuffer(vkRendererBackend, resourceHeapStagingBuffer);
+		destroyBuffer(vkRendererBackend, samplerHeapStagingBuffer);
+		for (uint8_t i = 0; i < SK::VkRendererBackend::NUM_FRAMES_IN_FLIGHT; ++i)
+		{
+			destroyBuffer(vkRendererBackend, resourceHeapGPUBuffers[i]);
+			destroyBuffer(vkRendererBackend, samplerHeapGPUBuffers[i]);
+		}
 
 		s_bufferWrites = {};
 		s_textureWrites = {};
@@ -204,7 +213,7 @@ namespace SK::VkRendererBackend
 		}
 	}
 
-	void DescriptorHeap::upload(State* vkRendererBackend, VkCommandBuffer cmd)
+	void DescriptorHeap::upload(State* vkRendererBackend, VkCommandBuffer cmd, uint8_t frameIndex)
 	{
 		assert(vkRendererBackend);
 		assert(this);
@@ -213,9 +222,9 @@ namespace SK::VkRendererBackend
 		// Copy resource and sampler staging buffers to their corresponding GPU buffers.
 		VkBufferCopy copy{ .srcOffset = 0, .dstOffset = 0 };
 		copy.size = resourceHeapSize;
-		vkCmdCopyBuffer(cmd, resourceHeapBufferStaging.buffer, resourceHeapBufferGPU.buffer, 1, &copy);
+		vkCmdCopyBuffer(cmd, resourceHeapStagingBuffer.buffer, resourceHeapGPUBuffers[frameIndex].buffer, 1, &copy);
 		copy.size = samplerHeapSize;
-		vkCmdCopyBuffer(cmd, samplerHeapBufferStaging.buffer, samplerHeapBufferGPU.buffer, 1, &copy);
+		vkCmdCopyBuffer(cmd, samplerHeapStagingBuffer.buffer, samplerHeapGPUBuffers[frameIndex].buffer, 1, &copy);
 
 		// Issue a barrier to synchronize. Upload is always called at the beginning of the frame. So, barrier is set wrt to that.
 		VkMemoryBarrier2 barrier{
@@ -239,7 +248,7 @@ namespace SK::VkRendererBackend
 		vkCmdPipelineBarrier2(cmd, &dependency);
 	}
 
-	void DescriptorHeap::bind(State* vkRendererBackend, VkCommandBuffer cmd)
+	void DescriptorHeap::bind(State* vkRendererBackend, VkCommandBuffer cmd, uint8_t frameIndex)
 	{
 		assert(vkRendererBackend);
 		assert(this);
@@ -249,7 +258,7 @@ namespace SK::VkRendererBackend
 			.sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
 			.pNext = nullptr,
 			.heapRange = VkDeviceAddressRangeEXT{
-				.address = resourceHeapBufferGPU.address,
+				.address = resourceHeapGPUBuffers[frameIndex].address,
 				.size = resourceHeapSize
 			},
 			.reservedRangeOffset = resourceReservedRangeOffset,
@@ -262,7 +271,7 @@ namespace SK::VkRendererBackend
 			.sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
 			.pNext = nullptr,
 			.heapRange = VkDeviceAddressRangeEXT{
-				.address = samplerHeapBufferGPU.address,
+				.address = samplerHeapGPUBuffers[frameIndex].address,
 				.size = samplerHeapSize
 			},
 			.reservedRangeOffset = samplerReservedRangeOffset,

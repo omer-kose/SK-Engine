@@ -128,6 +128,24 @@ const SK::Renderer::TextureHandle SK::Renderer::createTexture(RenderContext* ren
 	return renderContext->api->createTexture(renderContext, desc);
 }
 
+void SK::Renderer::destroyBuffer(RenderContext* renderContext, BufferHandle& handle)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->destroyBuffer != nullptr);
+
+	renderContext->api->destroyBuffer(renderContext, handle);
+}
+
+void SK::Renderer::destroyTexture(RenderContext* renderContext, TextureHandle& handle)
+{
+	assert(renderContext != nullptr);
+	assert(renderContext->api != nullptr);
+	assert(renderContext->api->destroyTexture != nullptr);
+
+	renderContext->api->destroyTexture(renderContext, handle);
+}
+
 const SK::Renderer::BufferDesc& SK::Renderer::getBufferDesc(RenderContext* renderContext, const BufferHandle& handle)
 {
 	assert(renderContext != nullptr);
@@ -173,7 +191,7 @@ const SK::Renderer::TextureHandle SK::Renderer::createPlacedTexture(RenderContex
 	return renderContext->api->createPlacedTexture(renderContext, desc, offset);
 }
 
-void SK::Renderer::destroyBufferDeferred(RenderContext* renderContext, BufferHandle handle)
+void SK::Renderer::destroyBufferDeferred(RenderContext* renderContext, BufferHandle& handle)
 {
 	assert(renderContext != nullptr);
 	assert(renderContext->api != nullptr);
@@ -182,7 +200,7 @@ void SK::Renderer::destroyBufferDeferred(RenderContext* renderContext, BufferHan
 	renderContext->api->destroyBufferDeferred(renderContext, handle);
 }
 
-void SK::Renderer::destroyTextureDeferred(RenderContext* renderContext, TextureHandle handle)
+void SK::Renderer::destroyTextureDeferred(RenderContext* renderContext, TextureHandle& handle)
 {
 	assert(renderContext != nullptr);
 	assert(renderContext->api != nullptr);

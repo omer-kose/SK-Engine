@@ -19,12 +19,12 @@ namespace SK::Renderer
 	// They are opaque handle types, so caller side will be using them with the routines provided by the Render Context.
 	struct PipelineHandle
 	{
-		uint32_t id;
+		uint32_t id = INVALID_HANDLE;
 	};
 
 	struct BufferHandle
 	{
-		uint32_t id;
+		uint32_t id = INVALID_HANDLE;
 
 		bool isValid() const
 		{
@@ -34,7 +34,7 @@ namespace SK::Renderer
 
 	struct TextureHandle
 	{
-		uint32_t id;
+		uint32_t id = INVALID_HANDLE;
 
 		bool isValid() const
 		{
@@ -466,14 +466,16 @@ namespace SK::Renderer
 
 		const BufferHandle (*createBuffer)(RenderContext* renderContext, const BufferDesc& desc);
 		const TextureHandle(*createTexture)(RenderContext* renderContext, const TextureDesc& desc);
+		void (*destroyBuffer)(RenderContext* renderContext, BufferHandle& handle);
+		void (*destroyTexture)(RenderContext* renderContext, TextureHandle& handle);
 		const BufferDesc& (*getBufferDesc)(RenderContext* renderContext, const BufferHandle& handle);
 		const TextureDesc& (*getTextureDesc)(RenderContext* renderContext, const TextureHandle& handle);
 
 		const TransientPlan (*planTransientMemory)(RenderContext* renderContext, const std::vector<TransientResourceRequest>& requests);
 		const BufferHandle (*createPlacedBuffer)(RenderContext* renderContext, const BufferDesc& desc, size_t offset);
 		const TextureHandle (*createPlacedTexture)(RenderContext* renderContext, const TextureDesc& desc, size_t offset);
-		void (*destroyBufferDeferred)(RenderContext* renderContext, BufferHandle handle);
-		void (*destroyTextureDeferred)(RenderContext* renderContext, TextureHandle handle);
+		void (*destroyBufferDeferred)(RenderContext* renderContext, BufferHandle& handle);
+		void (*destroyTextureDeferred)(RenderContext* renderContext, TextureHandle& handle);
 
 		const TextureHandle (*getSwapchainImageHandle)(RenderContext* renderContext);
 		const TextureHandle (*getMainDrawImageHandle)(RenderContext* renderContext);
@@ -527,6 +529,8 @@ namespace SK::Renderer
 
 	const BufferHandle createBuffer(RenderContext* renderContext, const BufferDesc& desc);
 	const TextureHandle createTexture(RenderContext* renderContext, const TextureDesc& desc);
+	void destroyBuffer(RenderContext* renderContext, BufferHandle& handle);
+	void destroyTexture(RenderContext* renderContext, TextureHandle& handle);
 	const BufferDesc& getBufferDesc (RenderContext* renderContext, const BufferHandle& handle);
 	const TextureDesc& getTextureDesc (RenderContext* renderContext, const TextureHandle& handle);
 
@@ -534,8 +538,8 @@ namespace SK::Renderer
 	const BufferHandle createPlacedBuffer(RenderContext* renderContext, const BufferDesc& desc, size_t offset);
 	const TextureHandle createPlacedTexture(RenderContext* renderContext, const TextureDesc& desc, size_t offset);
 	// Submits a deferred resource destruction request into the frame deletion queue of the backend. 
-	void destroyBufferDeferred(RenderContext* renderContext, BufferHandle handle);
-	void destroyTextureDeferred(RenderContext* renderContext, TextureHandle handle);
+	void destroyBufferDeferred(RenderContext* renderContext, BufferHandle& handle);
+	void destroyTextureDeferred(RenderContext* renderContext, TextureHandle& handle);
 
 	const TextureHandle getSwapchainImageHandle(RenderContext* renderContext);
 	const TextureHandle getMainDrawImageHandle(RenderContext* renderContext);

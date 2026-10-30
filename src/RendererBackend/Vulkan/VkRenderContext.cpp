@@ -836,10 +836,20 @@ static const SK::Renderer::BufferHandle createBuffer_(SK::Renderer::RenderContex
 		bufferRecord.buffer = SK::VkRendererBackend::createAndUploadGPUBuffer(vkRendererBackend, desc.size, toVkBufferUsageFlags(desc.usage), desc.data);
 	}
 
-	const uint32_t bufferIndex = static_cast<uint32_t>(vkRenderContext->buffers.size());
-	vkRenderContext->buffers.push_back(bufferRecord);
+	const uint32_t bufferIndex = acquireBufferSlot(vkRenderContext);
+	vkRenderContext->buffers[bufferIndex] = bufferRecord;
 	
 	return SK::Renderer::BufferHandle{ bufferIndex };
+}
+
+static void destroyBuffer_(SK::Renderer::RenderContext* renderContext, SK::Renderer::BufferHandle& handle)
+{
+	assert(handle.isValid());
+	
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	vkRenderContext->buffers[handle.id] = {};
+	vkRenderContext->bufferFreeList.push_back(handle.id);
+	handle.id = SK::Renderer::INVALID_HANDLE;
 }
 
 static uint32_t getOrCreateSampler(SK::Renderer::RenderContext* renderContext, const SK::Renderer::SamplerDesc& desc)
@@ -906,10 +916,20 @@ static const SK::Renderer::TextureHandle createTexture_(SK::Renderer::RenderCont
 		textureRecord.samplerIndex = getOrCreateSampler(renderContext, textureDesc.samplerDesc.value());
 	}
 
-	const uint32_t textureIndex = static_cast<uint32_t>(vkRenderContext->textures.size());
-	vkRenderContext->textures.push_back(textureRecord);
+	const uint32_t textureIndex = acquireTextureSlot(vkRenderContext);
+	vkRenderContext->textures[textureIndex] = textureRecord;
 
 	return SK::Renderer::TextureHandle{ textureIndex };
+}
+
+static void destroyTexture_(SK::Renderer::RenderContext* renderContext, SK::Renderer::TextureHandle& handle)
+{
+	assert(handle.isValid());
+
+	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
+	vkRenderContext->textures[handle.id] = {};
+	vkRenderContext->textureFreeList.push_back(handle.id);
+	handle.id = SK::Renderer::INVALID_HANDLE;
 }
 
 static const SK::Renderer::BufferDesc& getBufferDesc_(SK::Renderer::RenderContext* renderContext, const SK::Renderer::BufferHandle& handle)
@@ -1504,13 +1524,13 @@ static const SK::Renderer::TextureHandle createPlacedTexture_(SK::Renderer::Rend
 	return SK::Renderer::TextureHandle{ index };
 }
 
-static void destroyBufferDeferred_(SK::Renderer::RenderContext* renderContext, SK::Renderer::BufferHandle handle)
+static void destroyBufferDeferred_(SK::Renderer::RenderContext* renderContext, SK::Renderer::BufferHandle& handle)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 	SK::VkRendererBackend::FrameData& currentFrame = SK::VkRendererBackend::getCurrentFrameData(vkRendererBackend);
 
-	currentFrame.deletionQueue.pushFunction([vkRenderContext, vkRendererBackend, handle]() {
+	currentFrame.deletionQueue.pushFunction([vkRenderContext, vkRendererBackend, &handle]() {
 		SK::VkRendererBackend::BufferRecord& record = vkRenderContext->buffers[handle.id];
 		assert(record.ownsMemory == false && "destroyBufferDeferred called on a non-placed buffer.");
 
@@ -1518,16 +1538,17 @@ static void destroyBufferDeferred_(SK::Renderer::RenderContext* renderContext, S
 
 		record = {};
 		vkRenderContext->bufferFreeList.push_back(handle.id);
+		handle.id = SK::Renderer::INVALID_HANDLE;
 	});
 }
 
-static void destroyTextureDeferred_(SK::Renderer::RenderContext* renderContext, SK::Renderer::TextureHandle handle)
+static void destroyTextureDeferred_(SK::Renderer::RenderContext* renderContext, SK::Renderer::TextureHandle& handle)
 {
 	SK::VkRendererBackend::VkRenderContext* vkRenderContext = fetchVkRenderContext(renderContext);
 	SK::VkRendererBackend::State* vkRendererBackend = vkRenderContext->vkRendererBackend;
 	SK::VkRendererBackend::FrameData& currentFrame = SK::VkRendererBackend::getCurrentFrameData(vkRendererBackend);
 
-	currentFrame.deletionQueue.pushFunction([vkRenderContext, vkRendererBackend, handle]() {
+	currentFrame.deletionQueue.pushFunction([vkRenderContext, vkRendererBackend, &handle]() {
 		SK::VkRendererBackend::TextureRecord& record = vkRenderContext->textures[handle.id];
 		assert(record.ownsMemory == false && "destroyTextureDeferred called on a non-placed texture.");
 
@@ -1536,6 +1557,7 @@ static void destroyTextureDeferred_(SK::Renderer::RenderContext* renderContext, 
 
 		record = {};
 		vkRenderContext->textureFreeList.push_back(handle.id);
+		handle.id = SK::Renderer::INVALID_HANDLE;
 	});
 }
 
@@ -1637,6 +1659,8 @@ SK::Renderer::RenderContext SK::VkRendererBackend::makeRenderContext(VkRenderCon
 		.getBufferDeviceAddress = getBufferDeviceAddress_,
 		.createBuffer = createBuffer_,
 		.createTexture = createTexture_,
+		.destroyBuffer = destroyBuffer_,
+		.destroyTexture = destroyTexture_,
 		.getBufferDesc = getBufferDesc_,
 		.getTextureDesc = getTextureDesc_,
 		.planTransientMemory = planTransientMemory_,
